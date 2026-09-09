@@ -129,7 +129,7 @@ const INSTRUMENTS = {
   tenor: { id: "tenor", jp: "テナー (B♭)", semi: 2, step: 1, octSemi: 14, lowest: 58, highest: 89 },
   soprano: { id: "soprano", jp: "ソプラノ (B♭)", semi: 2, step: 1, octSemi: 2, lowest: 58, highest: 89 },
   bari: { id: "bari", jp: "バリトン (E♭)", semi: 9, step: 5, octSemi: 21, lowest: 56, highest: 89 },
-  c: { id: "c", jp: "C管 (フルート等)", semi: 0, step: 0, octSemi: 0, lowest: 58, highest: 89 }
+  c: { id: "c", jp: "C 管（移調なし）", semi: 0, step: 0, octSemi: 0, lowest: 58, highest: 89 }
 };
 
 /* ===================== 2. 運指データ ===================== */
@@ -256,13 +256,18 @@ const DEFAULT_SETTINGS = {
   micClarity: 0.55
 };
 
-// 感度プリセット（1=鈍い 〜 5=敏感）
+// 感度プリセット（1=鈍い 〜 7=最高感度）。
+// 6・7 は離れたマイクや小音量用。雑音でも反応しやすくなる代わりに、
+// ごく小さい音でも拾う。NSDF は振幅に依存しないので、しきい値さえ下げれば
+// 小さい音でも音程は取れる。
 const SENS_PRESETS = [
   { gate: 0.030, clarity: 0.78 },
   { gate: 0.014, clarity: 0.66 },
   { gate: 0.006, clarity: 0.55 },
   { gate: 0.0026, clarity: 0.46 },
-  { gate: 0.0011, clarity: 0.38 }
+  { gate: 0.0011, clarity: 0.38 },
+  { gate: 0.00040, clarity: 0.32 },
+  { gate: 0.00014, clarity: 0.26 }
 ];
 function sensLevel() {
   // いまの設定がどのプリセットに一番近いか（自動調整後は中間値になりうる）
@@ -528,6 +533,11 @@ function nav(name) {
 
 /* 記譜/実音の呼び分け */
 function usesConcertChart() { return S.chartPitch === "concert" && inst().semi !== 0; }
+// 自分の楽器の譜面の呼び名。アルト/バリ＝E♭譜、テナー/ソプラノ＝B♭譜、C管＝C譜
+function scoreName() {
+  const semi = inst().semi;
+  return semi === 9 ? "E♭譜" : semi === 2 ? "B♭譜" : "C譜";
+}
 function toWrittenName(name) { return usesConcertChart() ? transposeName(name, inst().semi, inst().step) : name; }
 function toConcertName(name) { return usesConcertChart() ? name : transposeName(name, -inst().semi + 12, -inst().step + 7); }
 
@@ -668,8 +678,8 @@ function pcButtonsHTML(flat, selected, disabled, marks) {
 
 function pitchBadge() {
   return usesConcertChart()
-    ? '<span class="badge badge-concert">実音（ピアノ譜）</span>'
-    : '<span class="badge badge-written">記譜（吹く音）</span>';
+    ? '<span class="badge badge-concert">C譜（実音）</span>'
+    : `<span class="badge badge-written">${scoreName()}（あなたの譜面）</span>`;
 }
 
 function fingerCardHTML(wtone, midi) {
@@ -760,9 +770,9 @@ function renderQuiz(ok) {
   } else if (Quiz.mode === "name") {
     const shown = q.wt.map((t) => noteHTML(t.name)).join('<span class="sep">·</span>');
     head = `<div class="qcard">
-      <div class="q-label">${usesConcertChart() ? "この音を吹いている。実音のコード名は？" : "このコード名は？"}</div>
+      <div class="q-label">${usesConcertChart() ? "この音を吹いている。C譜（実音）でのコード名は？" : "このコード名は？"}</div>
       <div class="q-main q-main-notes">${shown}</div>
-      <div class="q-sub">${usesConcertChart() ? "表示は記譜（吹く音）" : "&nbsp;"}</div>
+      <div class="q-sub">${usesConcertChart() ? `表示は${scoreName()}（あなたが吹く音）` : "&nbsp;"}</div>
     </div>`;
     input = '<div class="choice-grid">' + q.choices.map((c) =>
       `<button class="choice${Quiz.answered ? (c === q.chord.label ? " right" : (Quiz.picked === c ? " wrong" : "")) : ""}" data-choice="${esc(c)}" type="button"${Quiz.answered ? " disabled" : ""}>${pretty(c)}</button>`).join("") + "</div>";
@@ -1001,14 +1011,14 @@ $("#play-body").addEventListener("click", (e) => {
 
 // 音量は対数で見ないと小さい音の変化が見えないので dB に直してメーターに出す
 function rmsToPct(rms) {
-  const db = 20 * Math.log10(Math.max(rms, 1e-6));
-  return Math.max(0, Math.min(100, ((db + 70) / 60) * 100));
+  const db = 20 * Math.log10(Math.max(rms, 1e-7));
+  return Math.max(0, Math.min(100, ((db + 90) / 84) * 100));   // -90dB 〜 -6dB
 }
 function micPanelHTML() {
   const lv = sensLevel();
   return `<div class="mic-cal">
     <div class="mic-cal-head">
-      <span>マイク感度 <b>${lv}</b> / 5</span>
+      <span>マイク感度 <b>${lv}</b> / 7</span>
       <span class="mic-cal-level" id="mic-level-text">—</span>
     </div>
     <div class="mic-meter">
@@ -1017,11 +1027,11 @@ function micPanelHTML() {
     </div>
     <div class="mic-cal-row">
       <span class="mic-cal-cap">鈍い</span>
-      ${[1, 2, 3, 4, 5].map((n) => `<button class="sens${n === lv ? " on" : ""}" data-sens="${n}" type="button">${n}</button>`).join("")}
+      ${[1, 2, 3, 4, 5, 6, 7].map((n) => `<button class="sens${n === lv ? " on" : ""}${n >= 6 ? " hi" : ""}" data-sens="${n}" type="button">${n}</button>`).join("")}
       <span class="mic-cal-cap">敏感</span>
       <button class="mini" id="mic-auto" type="button">自動で合わせる</button>
     </div>
-    <div class="mic-cal-hint" id="mic-cal-hint">縦線より音量バーが右に伸びていれば拾えています。伸びないときは感度を上げてください。</div>
+    <div class="mic-cal-hint" id="mic-cal-hint">縦線より音量バーが右に伸びていれば拾えています。伸びないときは感度を上げてください。${lv >= 6 ? "<br><b>6・7 は最高感度</b>です。マイクが遠いとき用で、雑音にも反応しやすくなります。" : ""}</div>
   </div>`;
 }
 function updateMicMeter(r) {
@@ -1227,14 +1237,22 @@ function renderSettings() {
   wrap.innerHTML = `
     <h3 class="sec-title">楽器</h3>
     <div class="seg-row">${instBtns}</div>
-    <p class="dim small">記譜（あなたの譜面）は実音より ${inst().semi ? "＋" + inst().semi + " 半音" : "同じ"}。運指図はつねに記譜で表示します。</p>
+    <p class="dim small">${inst().semi ? `${scoreName()}（あなたの譜面）は実音より ＋${inst().semi} 半音で書かれます。` : "C 管なので譜面と実音は同じです。"}運指図はつねにあなたの譜面（押さえる指）で表示します。C 管はサックスの運指図のまま、移調だけを外したい人向けです。</p>
 
-    <h3 class="sec-title">出題するコードの書かれ方</h3>
-    <div class="seg-row">
-      <button class="seg ${S.chartPitch === "written" ? "on" : ""}" data-pitch="written" type="button">記譜（移調済みの譜面）</button>
-      <button class="seg ${S.chartPitch === "concert" ? "on" : ""}" data-pitch="concert" type="button">実音（ピアノ譜・原曲キー）</button>
-    </div>
-    <p class="dim small">実音を選ぶと「実音 C△7 を吹くなら、自分の譜面では A△7」という移調の訓練になります。セッションでピアノの譜面を渡されたとき用。</p>
+    <h3 class="sec-title">譜面（どの譜面のコードで出題するか）</h3>
+    ${inst().semi === 0 ? `
+      <p class="dim small">いまの楽器は C 管なので、C譜＝あなたの譜面です。移調はありません。</p>
+    ` : `
+      <div class="seg-row">
+        <button class="seg ${S.chartPitch === "written" ? "on" : ""}" data-pitch="written" type="button">${scoreName()}（自分のパート譜）</button>
+        <button class="seg ${S.chartPitch === "concert" ? "on" : ""}" data-pitch="concert" type="button">C譜（実音・イン C）</button>
+      </div>
+      <p class="dim small">
+        <b>${scoreName()}</b>：譜面に書かれたコードをそのまま吹く。吹奏楽やバンドの移調済みパート譜がこれ。<br>
+        <b>C譜</b>：ピアノ・ギターと同じ実音で書かれたコード（リアルブックの原曲キー、iRealPro の C 表示など）。
+        自分で移調して吹くので、「C譜の C△7 は ${pretty(transposeName("C", inst().semi, inst().step))}△7 として吹く」という訓練になります。
+      </p>
+    `}
 
     <h3 class="sec-title">出題するコード</h3>
     ${typeGroup(1, "レベル1", "まずここから。三和音とセブンス")}
@@ -1267,9 +1285,9 @@ function renderSettings() {
 $("#settings-wrap").addEventListener("click", (e) => {
   if (handleMicPanelClick(e)) return;
   const i = e.target.closest("[data-inst]");
-  if (i) { S.instrument = i.dataset.inst; save(); renderSettings(); updateBadge(); return; }
+  if (i) { S.instrument = i.dataset.inst; applyPitchChange(); return; }
   const p = e.target.closest("[data-pitch]");
-  if (p) { S.chartPitch = p.dataset.pitch; save(); renderSettings(); updateBadge(); return; }
+  if (p) { S.chartPitch = p.dataset.pitch; applyPitchChange(); return; }
   const on = e.target.closest("[data-lvon]");
   if (on) {
     const lv = Number(on.dataset.lvon);
@@ -1310,6 +1328,53 @@ $("#settings-wrap").addEventListener("change", (e) => {
   if (t.id === "set-a4") { const v = Number(t.value); if (v >= 392 && v <= 466) { S.a4 = v; save(); } return; }
 });
 
+
+/* ---------- 楽器と譜面のクイック切替（上部バッジから開く） ---------- */
+
+function quickSheetHTML() {
+  const instBtns = Object.values(INSTRUMENTS).map((i) =>
+    `<button class="seg ${S.instrument === i.id ? "on" : ""}" data-inst="${i.id}" type="button">${esc(i.jp)}</button>`).join("");
+  return `<div class="sheet-head">楽器と譜面</div>
+    <div class="sheet-sec">楽器</div>
+    <div class="seg-row">${instBtns}</div>
+    <div class="sheet-sec">譜面</div>
+    ${inst().semi === 0
+      ? '<p class="dim small">C 管なので移調はありません（C譜＝あなたの譜面）。</p>'
+      : `<div class="seg-row">
+          <button class="seg ${S.chartPitch === "written" ? "on" : ""}" data-pitch="written" type="button">${scoreName()}（自分のパート譜）</button>
+          <button class="seg ${S.chartPitch === "concert" ? "on" : ""}" data-pitch="concert" type="button">C譜（実音）</button>
+        </div>
+        <p class="dim small">C譜を選ぶと、C譜の C△7 を <b>${pretty(transposeName("C", inst().semi, inst().step))}△7</b> として吹く練習になります。</p>`}
+    <button class="btn btn-primary sheet-close" data-close type="button">閉じる</button>`;
+}
+function openQuickSheet() {
+  $("#quick-sheet-body").innerHTML = quickSheetHTML();
+  $("#quick-sheet").hidden = false;
+}
+function closeQuickSheet() { $("#quick-sheet").hidden = true; }
+
+// 楽器や譜面が変わったら、表示中の画面を作り直す（古い移調のまま残さない）
+function applyPitchChange() {
+  save();
+  updateBadge();
+  if ($("#quick-sheet") && !$("#quick-sheet").hidden) $("#quick-sheet-body").innerHTML = quickSheetHTML();
+  if (currentScreen === "quiz" && Quiz.q) Quiz.next();
+  else if (currentScreen === "play") startPlayMode(newChord());
+  else if (currentScreen === "chart") renderChart();
+  else if (currentScreen === "tuner") renderTuner();
+  else if (currentScreen === "settings") renderSettings();
+}
+
+$("#quick-sheet").addEventListener("click", (e) => {
+  if (e.target.closest("[data-close]")) { closeQuickSheet(); return; }
+  const i = e.target.closest("[data-inst]");
+  if (i) { S.instrument = i.dataset.inst; applyPitchChange(); return; }
+  const p = e.target.closest("[data-pitch]");
+  if (p) { S.chartPitch = p.dataset.pitch; applyPitchChange(); return; }
+});
+$("#inst-badge").addEventListener("click", openQuickSheet);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeQuickSheet(); });
+
 /* ===================== 16. 起動 ===================== */
 
 function updateBadge() {
@@ -1317,8 +1382,10 @@ function updateBadge() {
   const note = $("#home-note");
   if (note) {
     note.innerHTML = usesConcertChart()
-      ? `いまは<b>実音で出題</b>。${esc(inst().jp)}なので、実音 C のコードは <b>${pretty(transposeName("C", inst().semi, inst().step))}</b> として吹きます。`
-      : `いまは<b>記譜で出題</b>（譜面に書かれたまま吹く）。${esc(inst().jp)}の記譜 C は実音 <b>${pretty(transposeName("C", -inst().semi + 12, -inst().step + 7))}</b>。`;
+      ? `いまは <b>C譜（実音）</b> で出題。${esc(inst().jp)}なので、C譜の C のコードは <b>${pretty(transposeName("C", inst().semi, inst().step))}</b> として吹きます。`
+      : inst().semi === 0
+        ? `いまは <b>C譜</b> で出題。${esc(inst().jp)}なので移調はありません。`
+        : `いまは <b>${scoreName()}（自分のパート譜）</b> で出題。書かれたまま吹きます。${scoreName()}の C は実音 <b>${pretty(transposeName("C", -inst().semi + 12, -inst().step + 7))}</b>。`;
   }
 }
 
@@ -1336,9 +1403,19 @@ document.addEventListener("click", (e) => {
 updateBadge();
 nav("home");
 
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
-}
+// Web フォントは「あれば使う」だけの飾りなので、描画にも load イベントにも
+// 関わらせない。CDN が届かなくても代替フォントでそのまま動く。
+(function loadFonts() {
+  const l = document.createElement("link");
+  l.rel = "stylesheet";
+  l.media = "print";
+  l.href = "https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Bodoni+Moda:wght@600;700&display=swap";
+  l.onload = () => { l.media = "all"; };
+  document.head.appendChild(l);
+})();
+
+// load を待つと、外部リソースが詰まったときに登録されないので待たない
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
 // デバッグ・テスト用に主要関数を公開する
 window.__TYPES = CHORD_TYPES;

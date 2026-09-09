@@ -28,7 +28,7 @@ const page = await ctx.newPage();
 const errs = [];
 page.on('console', m => { if (m.type() === 'error' && !/fonts\.googleapis|ERR_CONNECTION|Failed to load resource/.test(m.text())) errs.push(m.text()); });
 page.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
-await page.goto('http://localhost:8931/index.html');
+await page.goto('http://localhost:8931/index.html', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(400);
 await page.addInitScript(() => {});
 
@@ -172,7 +172,7 @@ ck('運指クイズ: 音名→運指', sawMake);
 await page.evaluate(() => {
   localStorage.setItem('saxchord.v1', JSON.stringify({ settings: { instrument:'alto', chartPitch:'concert', types:['maj7'], roots:['C'], a4:442, sound:false } }));
 });
-await page.reload({ waitUntil: 'load' });
+await page.reload({ waitUntil: 'domcontentloaded' });
 await page.click('[data-mode="tones"]');
 await page.waitForTimeout(200);
 const cres = await page.evaluate(() => { const q=window.SaxChord.Quiz.q; return { label:q.chord.label, written:q.wt.map(t=>t.name).join(' ') }; });
@@ -200,9 +200,9 @@ const ctx2 = await browser.newContext({ viewport:{width:420,height:900}, permiss
 const p2 = await ctx2.newPage();
 const errs2 = [];
 p2.on('pageerror', e => errs2.push('PAGEERROR: ' + e.message));
-await p2.goto('http://localhost:8931/index.html');
+await p2.goto('http://localhost:8931/index.html', { waitUntil: 'domcontentloaded' });
 await p2.evaluate(() => localStorage.removeItem('saxchord.v1'));
-await p2.reload({ waitUntil: 'load' }); await p2.waitForTimeout(300);
+await p2.reload({ waitUntil: 'domcontentloaded' }); await p2.waitForTimeout(300);
 await p2.click('[data-mode="play"]');
 await p2.waitForTimeout(800);
 ck('吹いて答える: ターゲット表示', await p2.locator('.play-target .fing').count() === 1);
@@ -239,13 +239,13 @@ ck('全コード×全ルートで綴り・運指が破綻しない', stress.leng
 await page.evaluate(() => {
   localStorage.setItem('saxchord.v1', JSON.stringify({ settings: { instrument:'alto', chartPitch:'written', types:['maj7'], roots:['C'], sound:false } }));
 });
-await page.reload({ waitUntil: 'load' });
+await page.reload({ waitUntil: 'domcontentloaded' });
 await page.click('[data-mode="name"]');
 await page.waitForSelector('.choice-grid');
 const choices = await page.$$eval('.choice', els => els.map(e => e.dataset.choice));
 ck('4択に重複がない', new Set(choices).size === 4, JSON.stringify(choices));
 await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
-await page.reload({ waitUntil: 'load' });
+await page.reload({ waitUntil: 'domcontentloaded' });
 
 
 // --- 5. マイク感度 ---
@@ -271,24 +271,46 @@ ck('初期値は以前(0.012)より敏感', sens.defaultGate < 0.012, sens.defau
 
 await page.click('[data-nav="home"]'); await page.click('[data-nav="settings"]');
 await page.waitForSelector('.mic-cal');
-ck('設定に感度パネルがある', await page.locator('.mic-cal .sens').count() === 5);
+ck('設定に感度パネルがある（7段階）', await page.locator('.mic-cal .sens').count() === 7);
 ck('自動調整ボタンがある', await page.locator('#mic-auto').count() === 1);
 const before = await page.evaluate(() => window.SaxChord.settings().micGate);
-await page.click('.sens[data-sens="5"]');
+await page.click('.sens[data-sens="7"]');
 await page.waitForTimeout(120);
 const after = await page.evaluate(() => ({ gate: window.SaxChord.settings().micGate, clarity: window.SaxChord.settings().micClarity }));
-ck('感度5でしきい値が下がる', after.gate < before, JSON.stringify({before, after}));
-ck('感度5でクリアリティ条件も緩む', after.clarity < 0.5, after.clarity);
-ck('選んだ段階がボタンに反映される', await page.locator('.sens.on[data-sens="5"]').count() === 1);
+ck('最高感度でしきい値が大きく下がる', after.gate < before / 10, JSON.stringify({before, after}));
+ck('最高感度でクリアリティ条件も緩む', after.clarity < 0.3, after.clarity);
+ck('選んだ段階がボタンに反映される', await page.locator('.sens.on[data-sens="7"]').count() === 1);
+// 最高感度で拾える音量が、旧・最高感度(5)より小さいこと
+const reach = await page.evaluate(() => {
+  const S = window.SaxChord, sr = 44100;
+  const mk = (amp) => { const b = new Float32Array(4096);
+    for (let i=0;i<b.length;i++) b[i] = amp * Math.sin(2*Math.PI*330*i/sr); return b; };
+  const tiny = mk(0.0004);   // RMS ≈ 0.00028。ほとんど聞こえない大きさ
+  return { lv5: S.detectPitch(tiny, sr, { gate: 0.0011, peakMin: 0.2 }).freq,
+           lv7: S.detectPitch(tiny, sr, { gate: 0.00014, peakMin: 0.14 }).freq };
+});
+ck('感度5では拾えない極小音を感度7では拾える', reach.lv5 === 0 && Math.abs(reach.lv7 - 330) < 3, JSON.stringify(reach));
 await page.click('.sens[data-sens="1"]');
 await page.waitForTimeout(120);
 ck('感度1でしきい値が上がる', await page.evaluate(() => window.SaxChord.settings().micGate) > after.gate);
+// 上部バッジからのクイック切替
+await page.click('#inst-badge');
+await page.waitForSelector('#quick-sheet:not([hidden])');
+ck('バッジから楽器シートが開く', await page.locator('#quick-sheet [data-inst]').count() === 5);
+await page.click('#quick-sheet [data-inst="tenor"]');
+await page.waitForTimeout(150);
+ck('シートでテナーに切り替わる', /テナー/.test(await page.locator('#inst-badge').textContent()));
+ck('切替後もシートは開いたまま', await page.locator('#quick-sheet [data-pitch]').count() === 2);
+ck('テナーならB♭譜と表示', /B♭譜/.test(await page.locator('#quick-sheet [data-pitch="written"]').textContent()));
+await page.click('#quick-sheet [data-close]');
+await page.waitForTimeout(100);
+ck('シートを閉じられる', await page.locator('#quick-sheet[hidden]').count() === 1);
 ck('感度は保存される', await page.evaluate(() => JSON.parse(localStorage.getItem('saxchord.v1')).settings.micGate) > 0.02);
 // メーターのしきい値マーカーが動く
 const thPos = await page.evaluate(() => document.querySelector('#mic-meter-th').style.left);
 ck('しきい値マーカーが表示される', /%$/.test(thPos), thPos);
 await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
-await page.reload({ waitUntil: 'load' });
+await page.reload({ waitUntil: 'domcontentloaded' });
 
 
 // --- 6. マイク経路の通し確認（Chromium の疑似オーディオデバイスを使う） ---
@@ -300,11 +322,11 @@ const micCtx = await micBrowser.newContext({ viewport: { width: 420, height: 960
 const p3 = await micCtx.newPage();
 const errs3 = [];
 p3.on('pageerror', e => errs3.push('PAGEERROR: ' + e.message));
-await p3.goto('http://localhost:8931/index.html');
+await p3.goto('http://localhost:8931/index.html', { waitUntil: 'domcontentloaded' });
 await p3.click('[data-nav="tuner"]');
 await p3.waitForTimeout(600);
 ck('マイクが開ける', await p3.evaluate(() => window.SaxChord.mic().running === true && !window.SaxChord.mic().err));
-ck('チューナーに感度パネルが出る', await p3.locator('.mic-cal .sens').count() === 5);
+ck('チューナーに感度パネルが出る', await p3.locator('.mic-cal .sens').count() === 7);
 
 let heardNote = null, meterMoved = false;
 for (let i = 0; i < 45 && !heardNote; i++) {
@@ -323,6 +345,55 @@ ck('鳴っている音を検出して音名を表示する', !!heardNote, String
 ck('音名とセントが正しい', /^G4/.test(heardNote || '') && /\+2\d|\+3\d/.test(heardNote || ''), String(heardNote));
 ck('マイク画面で JS エラーが出ない', errs3.length === 0, JSON.stringify(errs3));
 await micBrowser.close();
+
+
+// --- 7. C譜 / 移調譜の切り替え ---
+async function useSettings(o) {
+  await page.evaluate((s) => localStorage.setItem('saxchord.v1', JSON.stringify({ settings: s })), o);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+}
+const badgeOf = async (mode) => {
+  await page.click('[data-nav="home"]');
+  await page.click(`[data-mode="${mode}"]`);
+  await page.waitForSelector('.qcard');
+  return (await page.locator('.qcard .badge').first().textContent()).trim();
+};
+
+await useSettings({ instrument:'alto', chartPitch:'written', types:['maj7'], roots:['C'], sound:false });
+ck('アルト＋自分のパート譜 → E♭譜と表示', (await badgeOf('tones')) === 'E♭譜（あなたの譜面）', await badgeOf('tones'));
+
+await useSettings({ instrument:'tenor', chartPitch:'written', types:['maj7'], roots:['C'], sound:false });
+ck('テナー → B♭譜と表示', (await badgeOf('tones')) === 'B♭譜（あなたの譜面）');
+
+await useSettings({ instrument:'alto', chartPitch:'concert', types:['maj7'], roots:['C'], sound:false });
+ck('C譜モード → C譜（実音）と表示', (await badgeOf('tones')) === 'C譜（実音）');
+
+// C 管：移調が起きないこと
+await useSettings({ instrument:'c', chartPitch:'concert', types:['maj7'], roots:['Eb'], sound:false });
+ck('C管 → C譜と表示', (await badgeOf('tones')) === 'C譜（あなたの譜面）');
+const cInst = await page.evaluate(() => {
+  const q = window.SaxChord.Quiz.q;
+  return { label: q.chord.label, tones: q.chord.tones.map(t=>t.name).join(' '), written: q.wt.map(t=>t.name).join(' ') };
+});
+ck('C管では吹く音＝コードの音（移調ゼロ）', cInst.tones === cInst.written && cInst.written === 'Eb G Bb D', JSON.stringify(cInst));
+
+// C 管のときは譜面の選択肢を出さない（意味がないので）
+await page.click('[data-nav="home"]'); await page.click('[data-nav="settings"]');
+await page.waitForSelector('.settings-wrap, #settings-wrap');
+ck('C管では譜面の切替ボタンを出さない', await page.locator('[data-pitch]').count() === 0);
+ck('C管では理由を説明する', /C 管なので/.test(await page.locator('#settings-wrap').textContent()));
+
+await useSettings({ instrument:'alto', chartPitch:'written', types:['maj7'], roots:['C'], sound:false });
+await page.click('[data-nav="settings"]');
+await page.waitForSelector('[data-pitch]');
+const segs = await page.$$eval('[data-pitch]', els => els.map(e => e.textContent.trim()));
+ck('設定に C譜 の選択肢が名前つきで出る', segs.some(x => /^C譜/.test(x)) && segs.some(x => /^E♭譜/.test(x)), JSON.stringify(segs));
+await page.click('[data-pitch="concert"]');
+await page.waitForTimeout(150);
+ck('C譜を選ぶと保存される', await page.evaluate(() => JSON.parse(localStorage.getItem('saxchord.v1')).settings.chartPitch) === 'concert');
+ck('ホームの説明もC譜になる', /C譜/.test(await page.locator('#home-note').textContent()));
+await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
+await page.reload({ waitUntil: 'domcontentloaded' });
 
 ck('JSエラーなし', errs.length===0 && errs2.length===0, JSON.stringify(errs.concat(errs2)));
 

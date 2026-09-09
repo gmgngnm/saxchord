@@ -169,11 +169,10 @@ ck('運指クイズ: 運指→音名', sawRead);
 ck('運指クイズ: 音名→運指', sawMake);
 
 // 実音出題モードでの整合性（アルト: 実音Cmaj7 → 記譜 A C# E G#）
-const concert = await page.evaluate(() => {
+await page.evaluate(() => {
   localStorage.setItem('saxchord.v1', JSON.stringify({ settings: { instrument:'alto', chartPitch:'concert', types:['maj7'], roots:['C'], a4:442, sound:false } }));
-  location.reload();
 });
-await page.waitForTimeout(500);
+await page.reload({ waitUntil: 'load' });
 await page.click('[data-mode="tones"]');
 await page.waitForTimeout(200);
 const cres = await page.evaluate(() => { const q=window.SaxChord.Quiz.q; return { label:q.chord.label, written:q.wt.map(t=>t.name).join(' ') }; });
@@ -203,7 +202,7 @@ const errs2 = [];
 p2.on('pageerror', e => errs2.push('PAGEERROR: ' + e.message));
 await p2.goto('http://localhost:8931/index.html');
 await p2.evaluate(() => localStorage.removeItem('saxchord.v1'));
-await p2.reload(); await p2.waitForTimeout(300);
+await p2.reload({ waitUntil: 'load' }); await p2.waitForTimeout(300);
 await p2.click('[data-mode="play"]');
 await p2.waitForTimeout(800);
 ck('吹いて答える: ターゲット表示', await p2.locator('.play-target .fing').count() === 1);
@@ -239,15 +238,91 @@ ck('全コード×全ルートで綴り・運指が破綻しない', stress.leng
 // 4択に重複が出ない（設定を 1 種類だけに絞った状態でも）
 await page.evaluate(() => {
   localStorage.setItem('saxchord.v1', JSON.stringify({ settings: { instrument:'alto', chartPitch:'written', types:['maj7'], roots:['C'], sound:false } }));
-  location.reload();
 });
-await page.waitForTimeout(400);
+await page.reload({ waitUntil: 'load' });
 await page.click('[data-mode="name"]');
 await page.waitForSelector('.choice-grid');
 const choices = await page.$$eval('.choice', els => els.map(e => e.dataset.choice));
 ck('4択に重複がない', new Set(choices).size === 4, JSON.stringify(choices));
-await page.evaluate(() => { localStorage.removeItem('saxchord.v1'); location.reload(); });
-await page.waitForTimeout(400);
+await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
+await page.reload({ waitUntil: 'load' });
+
+
+// --- 5. マイク感度 ---
+const sens = await page.evaluate(() => {
+  const S = window.SaxChord;
+  const sr = 44100;
+  const mk = (amp) => {
+    const b = new Float32Array(4096);
+    for (let i = 0; i < b.length; i++) b[i] = amp * (Math.sin(2*Math.PI*330*i/sr) + 0.8*Math.sin(2*Math.PI*660*i/sr));
+    return b;
+  };
+  const quiet = mk(0.004);            // かなり小さい音（RMS ≈ 0.0036）
+  return {
+    strictGate: S.detectPitch(quiet, sr, { gate: 0.012 }).freq,   // 従来のしきい値だと落ちる
+    looseGate:  S.detectPitch(quiet, sr, { gate: 0.001, peakMin: 0.2 }).freq,
+    defaultGate: S.settings().micGate,
+    stillGated: S.detectPitch(quiet, sr, { gate: 0.012 }).gated === true
+  };
+});
+ck('小さい音は厳しいしきい値だと弾かれる', sens.strictGate === 0 && sens.stillGated, JSON.stringify(sens));
+ck('しきい値を下げれば同じ小さい音を検出できる', Math.abs(sens.looseGate - 330) < 3, sens.looseGate);
+ck('初期値は以前(0.012)より敏感', sens.defaultGate < 0.012, sens.defaultGate);
+
+await page.click('[data-nav="home"]'); await page.click('[data-nav="settings"]');
+await page.waitForSelector('.mic-cal');
+ck('設定に感度パネルがある', await page.locator('.mic-cal .sens').count() === 5);
+ck('自動調整ボタンがある', await page.locator('#mic-auto').count() === 1);
+const before = await page.evaluate(() => window.SaxChord.settings().micGate);
+await page.click('.sens[data-sens="5"]');
+await page.waitForTimeout(120);
+const after = await page.evaluate(() => ({ gate: window.SaxChord.settings().micGate, clarity: window.SaxChord.settings().micClarity }));
+ck('感度5でしきい値が下がる', after.gate < before, JSON.stringify({before, after}));
+ck('感度5でクリアリティ条件も緩む', after.clarity < 0.5, after.clarity);
+ck('選んだ段階がボタンに反映される', await page.locator('.sens.on[data-sens="5"]').count() === 1);
+await page.click('.sens[data-sens="1"]');
+await page.waitForTimeout(120);
+ck('感度1でしきい値が上がる', await page.evaluate(() => window.SaxChord.settings().micGate) > after.gate);
+ck('感度は保存される', await page.evaluate(() => JSON.parse(localStorage.getItem('saxchord.v1')).settings.micGate) > 0.02);
+// メーターのしきい値マーカーが動く
+const thPos = await page.evaluate(() => document.querySelector('#mic-meter-th').style.left);
+ck('しきい値マーカーが表示される', /%$/.test(thPos), thPos);
+await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
+await page.reload({ waitUntil: 'load' });
+
+
+// --- 6. マイク経路の通し確認（Chromium の疑似オーディオデバイスを使う） ---
+// 疑似デバイスは断続的なビープを鳴らす。getUserMedia → 解析 → 表示までが繋がっているか見る。
+const micBrowser = await chromium.launch({
+  args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required']
+});
+const micCtx = await micBrowser.newContext({ viewport: { width: 420, height: 960 }, permissions: ['microphone'] });
+const p3 = await micCtx.newPage();
+const errs3 = [];
+p3.on('pageerror', e => errs3.push('PAGEERROR: ' + e.message));
+await p3.goto('http://localhost:8931/index.html');
+await p3.click('[data-nav="tuner"]');
+await p3.waitForTimeout(600);
+ck('マイクが開ける', await p3.evaluate(() => window.SaxChord.mic().running === true && !window.SaxChord.mic().err));
+ck('チューナーに感度パネルが出る', await p3.locator('.mic-cal .sens').count() === 5);
+
+let heardNote = null, meterMoved = false;
+for (let i = 0; i < 45 && !heardNote; i++) {
+  const f = await p3.evaluate(() => ({
+    note: document.querySelector('#tuner-note')?.textContent,
+    cents: document.querySelector('#tuner-cents')?.textContent,
+    over: document.querySelector('#mic-meter-fill')?.classList.contains('over')
+  }));
+  if (f.over) meterMoved = true;
+  if (f.note && f.note !== '—') heardNote = f.note + ' / ' + f.cents;
+  await p3.waitForTimeout(100);
+}
+ck('入力レベルメーターがしきい値を超えて反応する', meterMoved);
+ck('鳴っている音を検出して音名を表示する', !!heardNote, String(heardNote));
+// 疑似デバイスは約 400Hz。A=442 なら G4 の +29 セント前後になるはず
+ck('音名とセントが正しい', /^G4/.test(heardNote || '') && /\+2\d|\+3\d/.test(heardNote || ''), String(heardNote));
+ck('マイク画面で JS エラーが出ない', errs3.length === 0, JSON.stringify(errs3));
+await micBrowser.close();
 
 ck('JSエラーなし', errs.length===0 && errs2.length===0, JSON.stringify(errs.concat(errs2)));
 

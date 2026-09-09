@@ -249,8 +249,30 @@ const DEFAULT_SETTINGS = {
   german: false,
   a4: 442,
   autoAdvance: true,
-  sound: true
+  sound: true,
+  // マイク感度。micGate は音量のしきい値（RMS）、micClarity は「音程が取れている」
+  // と見なす自己相関の下限。どちらも小さいほど敏感。
+  micGate: 0.006,
+  micClarity: 0.55
 };
+
+// 感度プリセット（1=鈍い 〜 5=敏感）
+const SENS_PRESETS = [
+  { gate: 0.030, clarity: 0.78 },
+  { gate: 0.014, clarity: 0.66 },
+  { gate: 0.006, clarity: 0.55 },
+  { gate: 0.0026, clarity: 0.46 },
+  { gate: 0.0011, clarity: 0.38 }
+];
+function sensLevel() {
+  // いまの設定がどのプリセットに一番近いか（自動調整後は中間値になりうる）
+  let best = 0, diff = Infinity;
+  SENS_PRESETS.forEach((p, i) => {
+    const d = Math.abs(Math.log(p.gate) - Math.log(S.micGate));
+    if (d < diff) { diff = d; best = i; }
+  });
+  return best + 1;
+}
 
 let S = loadSettings();
 let STATS = loadStats();
@@ -439,12 +461,14 @@ const Mic = {
 /* NSDF（McLeod 法の簡易版）による基本周波数推定。
    サックスは倍音が強くオクターブ誤検出しやすいので、自己相関のピークを
    「最大値の 0.85 倍を超える最初のピーク」で選ぶ。 */
-function detectPitch(buf, sampleRate) {
+function detectPitch(buf, sampleRate, opts) {
+  const gate = opts && opts.gate != null ? opts.gate : S.micGate;
+  const peakMin = opts && opts.peakMin != null ? opts.peakMin : Math.min(0.3, S.micClarity * 0.55);
   const W = 2048;
   let rms = 0;
   for (let i = 0; i < W; i++) rms += buf[i] * buf[i];
   rms = Math.sqrt(rms / W);
-  if (rms < 0.012) return { freq: 0, clarity: 0, rms };
+  if (rms < gate) return { freq: 0, clarity: 0, rms, gated: true };
 
   const minLag = Math.max(2, Math.floor(sampleRate / 1400));
   const maxLag = Math.min(W - 8, Math.floor(sampleRate / 55));
@@ -461,7 +485,7 @@ function detectPitch(buf, sampleRate) {
   // 極大値を拾う
   const peaks = [];
   for (let lag = minLag + 1; lag < maxLag; lag++) {
-    if (nsdf[lag] > nsdf[lag - 1] && nsdf[lag] >= nsdf[lag + 1] && nsdf[lag] > 0.3) peaks.push(lag);
+    if (nsdf[lag] > nsdf[lag - 1] && nsdf[lag] >= nsdf[lag + 1] && nsdf[lag] > peakMin) peaks.push(lag);
   }
   if (!peaks.length) return { freq: 0, clarity: 0, rms };
   let best = peaks[0];
@@ -490,6 +514,7 @@ let currentScreen = "home";
 function nav(name) {
   if (currentScreen === "play" && name !== "play") stopPlayMode();
   if (currentScreen === "tuner" && name !== "tuner") Mic.stop();
+  if (currentScreen === "settings" && name !== "settings") { Cal.on = false; Mic.onFrame = null; Mic.stop(); }
   currentScreen = name;
   $$(".screen").forEach((s) => s.classList.remove("active"));
   const el = document.getElementById("screen-" + name);
@@ -866,12 +891,17 @@ function onPlayFrame(r) {
   if (targetMidi == null) return;
   const targetPc = ((concertMidi(targetMidi) % 12) + 12) % 12;
 
+  updateMicMeter(r);
+  calibrationFrame(r);
+
   const live = $("#play-live");
-  const heard = r.freq > 0 && r.clarity > 0.62;
+  const heard = r.freq > 0 && r.clarity > S.micClarity;
   if (live) {
     if (!heard) {
       live.className = "play-live idle";
-      live.innerHTML = `<span class="pl-note">—</span><span class="pl-hint">吹いてください</span>`;
+      // 音は来ているのに音程が取れないのか、そもそも音量が届いていないのかを分ける
+      const hint = r.rms >= S.micGate ? "音は拾えています。もう少し伸ばして吹いてください" : "吹いてください";
+      live.innerHTML = `<span class="pl-note">—</span><span class="pl-hint">${hint}</span>`;
     } else {
       const pc = ((Mic.midi % 12) + 12) % 12;
       const hit = pc === targetPc;
@@ -880,13 +910,11 @@ function onPlayFrame(r) {
         `<span class="pl-cents ${Math.abs(Mic.cents) <= 15 ? "in" : ""}">${Mic.cents > 0 ? "+" : ""}${Mic.cents}¢</span>` +
         `<span class="pl-hint">${hit ? "その音！" : "実音 " + pretty(commonName(targetPc)) + " を狙う"}</span>`;
     }
-    const bar = $("#play-meter-fill");
-    if (bar) bar.style.width = Math.min(100, Math.round(Mic.rms * 900)) + "%";
     const needle = $("#play-needle");
     if (needle && heard) needle.style.transform = `translateX(${Math.max(-50, Math.min(50, Mic.cents))}px)`;
   }
 
-  if (heard && ((Mic.midi % 12) + 12) % 12 === targetPc && Math.abs(Mic.cents) <= 45 && r.rms > 0.014) {
+  if (heard && ((Mic.midi % 12) + 12) % 12 === targetPc && Math.abs(Mic.cents) <= 45) {
     Play.hold++;
   } else if (Play.hold > 0) {
     Play.hold = Math.max(0, Play.hold - 1);
@@ -936,7 +964,7 @@ function renderPlay(cleared) {
     ${Play.listening ? `
       <div class="play-live idle" id="play-live"><span class="pl-note">—</span><span class="pl-hint">吹いてください</span></div>
       <div class="tuner-scale"><div class="tuner-center"></div><div class="tuner-needle" id="play-needle"></div></div>
-      <div class="play-meter"><div class="play-meter-fill" id="play-meter-fill"></div></div>
+      ${micPanelHTML()}
     ` : `
       <div class="mic-off">
         <p>${esc(Mic.err || "マイクを使うと、吹いた音を自動で判定します。")}</p>
@@ -953,6 +981,7 @@ function renderPlay(cleared) {
 }
 
 $("#play-body").addEventListener("click", (e) => {
+  if (handleMicPanelClick(e)) return;
   if (e.target.closest("#play-mic-on")) { ensureMic(); return; }
   if (e.target.closest("#play-listen")) { playWrittenMidis([Play.midis[Math.min(Play.idx, Play.midis.length - 1)]], { dur: 0.9 }); return; }
   if (e.target.closest("#play-skip")) {
@@ -966,6 +995,100 @@ $("#play-body").addEventListener("click", (e) => {
   }
   if (e.target.closest("#play-next")) { startPlayMode(newChord()); return; }
 });
+
+
+/* ---------- マイク感度パネル（吹いて答える・チューナー・設定で共用） ---------- */
+
+// 音量は対数で見ないと小さい音の変化が見えないので dB に直してメーターに出す
+function rmsToPct(rms) {
+  const db = 20 * Math.log10(Math.max(rms, 1e-6));
+  return Math.max(0, Math.min(100, ((db + 70) / 60) * 100));
+}
+function micPanelHTML() {
+  const lv = sensLevel();
+  return `<div class="mic-cal">
+    <div class="mic-cal-head">
+      <span>マイク感度 <b>${lv}</b> / 5</span>
+      <span class="mic-cal-level" id="mic-level-text">—</span>
+    </div>
+    <div class="mic-meter">
+      <div class="mic-meter-fill" id="mic-meter-fill"></div>
+      <div class="mic-meter-th" id="mic-meter-th" style="left:${rmsToPct(S.micGate)}%"></div>
+    </div>
+    <div class="mic-cal-row">
+      <span class="mic-cal-cap">鈍い</span>
+      ${[1, 2, 3, 4, 5].map((n) => `<button class="sens${n === lv ? " on" : ""}" data-sens="${n}" type="button">${n}</button>`).join("")}
+      <span class="mic-cal-cap">敏感</span>
+      <button class="mini" id="mic-auto" type="button">自動で合わせる</button>
+    </div>
+    <div class="mic-cal-hint" id="mic-cal-hint">縦線より音量バーが右に伸びていれば拾えています。伸びないときは感度を上げてください。</div>
+  </div>`;
+}
+function updateMicMeter(r) {
+  const fill = $("#mic-meter-fill");
+  if (!fill) return;
+  fill.style.width = rmsToPct(r.rms) + "%";
+  fill.classList.toggle("over", r.rms >= S.micGate);
+  const th = $("#mic-meter-th");
+  if (th) th.style.left = rmsToPct(S.micGate) + "%";
+  const txt = $("#mic-level-text");
+  if (txt) txt.textContent = r.rms < 1e-5 ? "無音" : Math.round(20 * Math.log10(Math.max(r.rms, 1e-6))) + " dB";
+}
+
+// 周囲の雑音を 1.5 秒測って、その少し上にしきい値を置く
+const Cal = { on: false, samples: [], t0: 0 };
+function startCalibration() {
+  Cal.on = true; Cal.samples = []; Cal.t0 = Date.now();
+  const hint = $("#mic-cal-hint");
+  if (hint) { hint.textContent = "測定中… 吹かずに 1.5 秒そのままで"; hint.classList.add("busy"); }
+  if (!Mic.running) {
+    Mic.start().then((ok) => {
+      if (!ok) {
+        const h = $("#mic-cal-hint");
+        if (h) { h.textContent = Mic.err; h.classList.remove("busy"); }
+        Cal.on = false;
+        return;
+      }
+      if (currentScreen === "tuner") Mic.onFrame = onTunerFrame;
+      else if (currentScreen === "play") Mic.onFrame = onPlayFrame;
+      else Mic.onFrame = onMicPanelFrame;      // 設定画面：メーターと測定だけ
+    });
+  }
+}
+function calibrationFrame(r) {
+  if (!Cal.on) return;
+  Cal.samples.push(r.rms);
+  if (Date.now() - Cal.t0 < 1500) return;
+  Cal.on = false;
+  const sorted = Cal.samples.slice().sort((a, b) => a - b);
+  const noise = sorted.length ? sorted[Math.floor(sorted.length * 0.9)] : 0;   // 雑音の上のほう
+  S.micGate = Math.max(0.0009, Math.min(0.05, noise * 2.5 + 0.0008));
+  S.micClarity = SENS_PRESETS[sensLevel() - 1].clarity;
+  save();
+  refreshMicPanel();
+  const hint = $("#mic-cal-hint");
+  if (hint) { hint.textContent = `雑音に合わせて感度 ${sensLevel()} にしました。試しに吹いてみてください。`; hint.classList.remove("busy"); }
+}
+function refreshMicPanel() {
+  if (currentScreen === "play") renderPlay();
+  else if (currentScreen === "tuner") renderTuner();
+  else if (currentScreen === "settings") renderSettings();
+}
+// 設定画面など、判定を伴わない画面でのフレーム処理
+function onMicPanelFrame(r) { updateMicMeter(r); calibrationFrame(r); }
+
+// 感度パネルのクリックを処理する。処理したら true
+function handleMicPanelClick(e) {
+  const b = e.target.closest("[data-sens]");
+  if (b) {
+    const p = SENS_PRESETS[Number(b.dataset.sens) - 1];
+    S.micGate = p.gate; S.micClarity = p.clarity; save();
+    refreshMicPanel();
+    return true;
+  }
+  if (e.target.closest("#mic-auto")) { startCalibration(); return true; }
+  return false;
+}
 
 /* ===================== 12. 運指表 ===================== */
 
@@ -1001,6 +1124,8 @@ $("#chart-wrap").addEventListener("click", (e) => {
 
 /* ===================== 13. チューナー / 音当て ===================== */
 
+$("#tuner-wrap").addEventListener("click", (e) => { handleMicPanelClick(e); });
+
 function renderTuner() {
   const wrap = $("#tuner-wrap");
   wrap.innerHTML = `
@@ -1008,8 +1133,8 @@ function renderTuner() {
       <div class="tuner-note" id="tuner-note">—</div>
       <div class="tuner-cents" id="tuner-cents">マイクを許可してください</div>
       <div class="tuner-scale"><div class="tuner-center"></div><div class="tuner-needle" id="tuner-needle"></div></div>
-      <div class="play-meter"><div class="play-meter-fill" id="tuner-meter"></div></div>
     </div>
+    ${micPanelHTML()}
     <div class="tuner-fing" id="tuner-fing"></div>
     <p class="chart-lead">吹いた音の<b>実音</b>を表示し、${esc(inst().jp)}での<b>記譜音と運指</b>を並べます。基準 A = ${S.a4}Hz（設定で変更）。</p>`;
   Mic.start().then((ok) => {
@@ -1019,13 +1144,13 @@ function renderTuner() {
 }
 function onTunerFrame(r) {
   if (currentScreen !== "tuner") return;
-  const note = $("#tuner-note"), cents = $("#tuner-cents"), needle = $("#tuner-needle"),
-    meter = $("#tuner-meter"), fing = $("#tuner-fing");
+  const note = $("#tuner-note"), cents = $("#tuner-cents"), needle = $("#tuner-needle"), fing = $("#tuner-fing");
   if (!note) return;
-  if (meter) meter.style.width = Math.min(100, Math.round(r.rms * 900)) + "%";
-  if (!(r.freq > 0 && r.clarity > 0.62)) {
+  updateMicMeter(r);
+  calibrationFrame(r);
+  if (!(r.freq > 0 && r.clarity > S.micClarity)) {
     note.textContent = "—"; note.className = "tuner-note";
-    cents.textContent = "吹いてください";
+    cents.textContent = r.rms >= S.micGate ? "音は拾えています。音程が取れるまで伸ばして吹いてください" : "吹いてください";
     return;
   }
   const pc = ((Mic.midi % 12) + 12) % 12;
@@ -1126,6 +1251,10 @@ function renderSettings() {
       <button class="mini" id="roots-flat" type="button">♭系だけ（管楽器に多い）</button>
     </div>
 
+    <h3 class="sec-title">マイク感度</h3>
+    ${micPanelHTML()}
+    <p class="dim small">大きく吹かないと反応しないときは感度を上げてください。「自動で合わせる」は、周囲の雑音を 1.5 秒測ってその少し上にしきい値を置きます（測定中は吹かないこと）。</p>
+
     <h3 class="sec-title">その他</h3>
     <label class="toggle"><input type="checkbox" id="set-german" ${S.german ? "checked" : ""}><span>ドイツ音名のカタカナを併記（ツェー / エス …）</span></label>
     <label class="toggle"><input type="checkbox" id="set-sound" ${S.sound ? "checked" : ""}><span>音を鳴らす</span></label>
@@ -1136,6 +1265,7 @@ function renderSettings() {
 }
 
 $("#settings-wrap").addEventListener("click", (e) => {
+  if (handleMicPanelClick(e)) return;
   const i = e.target.closest("[data-inst]");
   if (i) { S.instrument = i.dataset.inst; save(); renderSettings(); updateBadge(); return; }
   const p = e.target.closest("[data-pitch]");
@@ -1212,5 +1342,5 @@ if ("serviceWorker" in navigator) {
 
 // デバッグ・テスト用に主要関数を公開する
 window.__TYPES = CHORD_TYPES;
-window.SaxChord = { __svg: fingeringSVG, buildChord, fingeringFor, transposeName, spell, detectPitch, voiceChord, S: () => S, Quiz, Play };
+window.SaxChord = { __svg: fingeringSVG, buildChord, fingeringFor, transposeName, spell, detectPitch, voiceChord, settings: () => S, mic: () => Mic, S: () => S, Quiz, Play };
 })();

@@ -197,6 +197,25 @@ button{font-family:inherit; color:inherit;}
   border-radius:12px; padding:10px;}
 .play-meter{height:6px; border-radius:3px; background:var(--surface-2); overflow:hidden; margin-top:8px;}
 .play-meter-fill{height:100%; width:0; background:var(--accent); transition:width .08s linear;}
+
+/* ---------- マイク感度 ---------- */
+.mic-cal{margin-top:12px; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:12px;}
+.mic-cal-head{display:flex; justify-content:space-between; align-items:baseline; font-size:12.5px; color:var(--ink-soft);}
+.mic-cal-head b{font-size:15px; color:var(--ink);}
+.mic-cal-level{font-size:11.5px; color:var(--ink-faint); font-variant-numeric:tabular-nums;}
+.mic-meter{position:relative; height:12px; border-radius:6px; background:var(--surface-2); overflow:hidden; margin:8px 0 10px;}
+.mic-meter-fill{height:100%; width:0; background:var(--ink-faint); transition:width .06s linear;}
+.mic-meter-fill.over{background:var(--ok);}
+.mic-meter-th{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--ng); border-radius:1px;
+  transition:left .12s ease;}
+.mic-cal-row{display:flex; align-items:center; gap:5px; flex-wrap:wrap;}
+.mic-cal-cap{font-size:10.5px; color:var(--ink-faint);}
+.sens{width:34px; height:34px; border-radius:10px; border:1px solid var(--line); background:var(--surface-2);
+  font-size:13px; font-weight:700; cursor:pointer;}
+.sens.on{background:var(--accent); color:#fff; border-color:transparent;}
+.mic-cal-row .mini{margin-left:auto;}
+.mic-cal-hint{margin-top:8px; font-size:11.5px; color:var(--ink-faint); line-height:1.5;}
+.mic-cal-hint.busy{color:var(--accent); font-weight:700;}
 .play-actions{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
 .play-actions .btn-primary{margin-left:auto;}
 .mic-off{margin-top:12px; text-align:center; background:var(--surface-2); border:1px dashed var(--line);

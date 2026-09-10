@@ -119,6 +119,56 @@ python3 -m http.server 8000
 
 リポジトリを丸ごとどこかに置けば、そのまま静的サイトとして動く（ビルド・依存なし）。
 
+## Web サーバに置く
+
+静的ファイルを返せれば何でもよい。ビルドもサーバ側のプログラムも要らない。ファイル一式をドキュメントルート（またはその下の任意のディレクトリ）にコピーするだけ。
+
+- **HTTPS が必要**。マイクは `https://` か `localhost` でしか使えない（ブラウザの決まり）。Let's Encrypt などで証明書を入れる。
+- **サブディレクトリでも動く**。参照はすべて相対パスなので `https://example.com/sax/` のような置き方でよい。Service Worker の担当範囲も置いた場所に自動で合う。
+- **URL の書き換え設定は不要**。画面遷移は `#/chords` のようなハッシュで表しているので、`.../#/quiz/degree` のような直リンクもサーバ設定なしで開ける（サーバから見ればどのURLも `index.html` を返すだけ）。
+- **MIME タイプ**：`.js` `.json` `.svg` `.png` が正しく返ること。たいていの既定設定で問題ない。`.json` が `application/json` で返らないと manifest が読まれない。
+
+### キャッシュの推奨設定
+
+`index.html` と `sw.js` は都度確認させ、バージョン付きの資産は長く持たせるのが良い。
+
+nginx:
+
+```nginx
+location = /index.html { add_header Cache-Control "no-cache"; }
+location = /sw.js      { add_header Cache-Control "no-cache"; }
+location ~* \.(js|css|png|svg)$ { add_header Cache-Control "public, max-age=604800"; }
+```
+
+Apache（.htaccess）:
+
+```apache
+<FilesMatch "^(index\.html|sw\.js)$">
+  Header set Cache-Control "no-cache"
+</FilesMatch>
+<FilesMatch "\.(js|css|png|svg)$">
+  Header set Cache-Control "public, max-age=604800"
+</FilesMatch>
+```
+
+`index.html` が `app.js?v=N` とバージョン付きで読むので、`?v=N` を上げれば長いキャッシュでも確実に切り替わる。
+
+## 画面の URL
+
+| 画面 | URL |
+| --- | --- |
+| ホーム | `#/home` |
+| クイズ | `#/quiz/tones` `#/quiz/degree` `#/quiz/name` `#/quiz/fingering` |
+| 吹いて答える | `#/play` |
+| コード表 | `#/chords` |
+| 運指表 | `#/chart` |
+| チューナー | `#/tuner` |
+| 成績 | `#/stats` |
+| 設定 | `#/settings` |
+| 使い方 | `#/help` |
+
+ブラウザの戻る/進むで移動でき、直リンクもできる。「吹いて答える」で次のコードに進んでも履歴は増えない（戻るで練習の最初まで巻き戻らないように）。楽器バッジのシートは、戻るを押すとシートだけが閉じる。
+
 ## 配信するときの注意
 
 GitHub Pages は静的ファイルに 10 分のキャッシュ指示を付ける。そのままだと

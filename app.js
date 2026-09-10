@@ -634,6 +634,11 @@ let currentScreen = "home";
 let lastQuizScreen = null;       // 使い方から戻る先を覚えておく
 
 // 画面ごとに右上のボタンを出し分ける
+const SCREEN_TITLES = {
+  home: "SaxChord", quiz: "クイズ", play: "吹いて答える", help: "使い方",
+  chords: "コード表", chart: "運指表", tuner: "チューナー", stats: "成績", settings: "設定"
+};
+
 const TOPBAR = {
   home:     { help: false, home: false, back: false, settings: true },
   quiz:     { help: true,  home: true,  back: false, settings: false },
@@ -653,12 +658,59 @@ function updateTopbar(name) {
   $("#tb-settings").hidden = !c.settings;
 }
 
-function nav(name) {
+/* URL は #/quiz/tones のようなハッシュで表す。
+   静的サーバに置くだけで直リンクも戻る/進むも動き、サーバ側の設定が要らない。 */
+const ROUTES = ["home", "quiz", "play", "help", "chords", "chart", "tuner", "stats", "settings"];
+let histDepth = 0;                 // このアプリの中で積んだ履歴の数
+
+function hashFor(name, arg) { return "#/" + name + (arg ? "/" + arg : ""); }
+function routeFromHash() {
+  const parts = (location.hash || "").replace(/^#\/?/, "").split("/");
+  const name = ROUTES.includes(parts[0]) ? parts[0] : "home";
+  return { name, arg: parts[1] || "" };
+}
+
+// 履歴から呼ばれたときに、画面をその route に合わせる
+function applyRoute(r) {
+  if (r.name === "quiz") {
+    if (currentScreen !== "quiz" || !Quiz.q || (r.arg && Quiz.mode !== r.arg)) Quiz.start(r.arg || "tones", true);
+    else nav("quiz", { fromHistory: true, arg: Quiz.mode });
+  } else if (r.name === "play") {
+    if (currentScreen !== "play" || !Play.chord) startPlayMode(newChord(), { fromHistory: true });
+    else nav("play", { fromHistory: true });
+  } else {
+    nav(r.name, { fromHistory: true });
+  }
+}
+
+window.addEventListener("popstate", () => {
+  // シートが開いていれば、まずそれを閉じるのが自然な戻り方
+  const sheet = $("#quick-sheet");
+  if (sheet && !sheet.hidden) { closeQuickSheet(true); return; }
+  histDepth = Math.max(0, histDepth - 1);
+  applyRoute(routeFromHash());
+});
+// ハッシュを直接書き換えられた場合にも追従する
+window.addEventListener("hashchange", () => {
+  const r = routeFromHash();
+  if (r.name !== currentScreen) applyRoute(r);
+});
+
+function nav(name, opts) {
+  const o = opts || {};
   if (currentScreen === "play" && name !== "play") stopPlayMode();
   if (currentScreen === "tuner" && name !== "tuner") Mic.stop();
   if (currentScreen === "settings" && name !== "settings") { Cal.on = false; Mic.onFrame = null; Mic.stop(); }
   if (name === "help" && (currentScreen === "quiz" || currentScreen === "play")) lastQuizScreen = currentScreen;
+  if (!o.fromHistory) {
+    const want = hashFor(name, o.arg);
+    if (location.hash !== want) {
+      if (o.replace) history.replaceState(null, "", want);
+      else { history.pushState(null, "", want); histDepth++; }
+    }
+  }
   currentScreen = name;
+  document.title = name === "home" ? "SaxChord" : (SCREEN_TITLES[name] || name) + " — SaxChord";
   updateTopbar(name);
   $$(".screen").forEach((s) => s.classList.remove("active"));
   const el = document.getElementById("screen-" + name);
@@ -714,9 +766,9 @@ function writtenTones(chord) {
 const Quiz = {
   mode: "tones", q: null, answered: false, n: 0, ok: 0, streak: 0, selected: new Set(),
 
-  start(mode) {
+  start(mode, fromHistory) {
     this.mode = mode; this.n = 0; this.ok = 0; this.streak = 0;
-    nav("quiz");
+    nav("quiz", { arg: mode, fromHistory: !!fromHistory });
     this.next();
   },
   next() {
@@ -1034,7 +1086,7 @@ function startPlayMode(chord, opts) {
   Play.idx = 0; Play.done = Play.wt.map(() => false); Play.hold = 0;
   Play.sinceTarget = Date.now(); Play.armed = false;
   Play.reveal = false; Play.cleared = false;
-  nav("play");
+  nav("play", { fromHistory: !!o.fromHistory, replace: currentScreen === "play" });
   renderPlay();
   ensureMic();
 }
@@ -1595,8 +1647,8 @@ function renderHelp() {
 }
 $("#help-wrap").addEventListener("click", (e) => {
   if (e.target.closest("#help-back")) {
-    if (lastQuizScreen) { const t = lastQuizScreen; lastQuizScreen = null; nav(t); if (t === "play") { renderPlay(); ensureMic(); } }
-    else nav("home");
+    if (histDepth > 0) history.back();
+    else nav("home", { replace: true });
   }
 });
 
@@ -1739,8 +1791,17 @@ function quickSheetHTML() {
 function openQuickSheet() {
   $("#quick-sheet-body").innerHTML = quickSheetHTML();
   $("#quick-sheet").hidden = false;
+  // 戻るでシートだけ閉じられるように、履歴を 1 つ積む
+  history.pushState({ sheet: 1 }, "", location.hash);
+  histDepth++;
 }
-function closeQuickSheet() { $("#quick-sheet").hidden = true; }
+// fromHistory=true は popstate から呼ばれた場合（履歴はすでに戻っている）
+function closeQuickSheet(fromHistory) {
+  const sheet = $("#quick-sheet");
+  if (!sheet || sheet.hidden) return;
+  sheet.hidden = true;
+  if (!fromHistory && histDepth > 0) { histDepth--; history.back(); }
+}
 
 // 楽器や譜面が変わったら、表示中の画面を作り直す（古い移調のまま残さない）
 function applyPitchChange() {
@@ -1766,11 +1827,9 @@ $("#tb-home").addEventListener("click", () => nav("home"));
 $("#tb-settings").addEventListener("click", () => nav("settings"));
 $("#tb-help").addEventListener("click", () => nav("help"));
 $("#tb-back").addEventListener("click", () => {
-  // 使い方はクイズの途中から開くので、開いた画面に戻す
-  if (currentScreen === "help" && lastQuizScreen) {
-    const t = lastQuizScreen; lastQuizScreen = null; nav(t);
-    if (t === "play") { renderPlay(); ensureMic(); }
-  } else nav("home");
+  // ブラウザの戻ると同じ動きにする。直リンクで入ってきて戻り先が無いときはホームへ
+  if (histDepth > 0) history.back();
+  else nav("home", { replace: true });
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeQuickSheet(); });
 
@@ -1799,7 +1858,14 @@ document.addEventListener("click", (e) => {
 
 applyPalette();
 updateBadge();
-nav("home");
+(function bootRoute() {
+  const r = routeFromHash();
+  if (r.name === "quiz") Quiz.start(r.arg || "tones", true);
+  else if (r.name === "play") startPlayMode(newChord(), { fromHistory: true });
+  else nav(r.name, { fromHistory: true });
+  // 最初の 1 つは replace で置く（戻るでいきなりサイトを離れないように）
+  history.replaceState(null, "", hashFor(currentScreen, currentScreen === "quiz" ? Quiz.mode : ""));
+})();
 
 // Web フォントは「あれば使う」だけの飾りなので、描画にも load イベントにも
 // 関わらせない。CDN が届かなくても代替フォントでそのまま動く。

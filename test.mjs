@@ -33,6 +33,11 @@ await page.waitForTimeout(400);
 await page.addInitScript(() => {});
 
 const fail = [];
+// リロード前にハッシュをホームへ戻す。残っていると前の画面が復元される
+const reloadHome = async (pg) => {
+  await pg.evaluate(() => { try { history.replaceState(null, '', '#/home'); } catch {} });
+  await pg.reload({ waitUntil: 'domcontentloaded' });
+};
 const ck = (name, cond, extra='') => { console.log((cond?'  ok  ':'  FAIL') + ' ' + name + (cond?'':' :: '+extra)); if(!cond) fail.push(name); };
 
 // --- 1. 音楽理論 ---
@@ -172,7 +177,7 @@ ck('運指クイズ: 音名→運指', sawMake);
 await page.evaluate(() => {
   localStorage.setItem('saxchord.v1', JSON.stringify({ settings: { instrument:'alto', chartPitch:'concert', types:['maj7'], roots:['C'], a4:442, sound:false } }));
 });
-await page.reload({ waitUntil: 'domcontentloaded' });
+await reloadHome(page);
 await page.click('[data-mode="tones"]');
 await page.waitForTimeout(200);
 const cres = await page.evaluate(() => { const q=window.SaxChord.Quiz.q; return { label:q.chord.label, written:q.wt.map(t=>t.name).join(' ') }; });
@@ -239,13 +244,13 @@ ck('全コード×全ルートで綴り・運指が破綻しない', stress.leng
 await page.evaluate(() => {
   localStorage.setItem('saxchord.v1', JSON.stringify({ settings: { instrument:'alto', chartPitch:'written', types:['maj7'], roots:['C'], sound:false } }));
 });
-await page.reload({ waitUntil: 'domcontentloaded' });
+await reloadHome(page);
 await page.click('[data-mode="name"]');
 await page.waitForSelector('.choice-grid');
 const choices = await page.$$eval('.choice', els => els.map(e => e.dataset.choice));
 ck('4択に重複がない', new Set(choices).size === 4, JSON.stringify(choices));
 await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
-await page.reload({ waitUntil: 'domcontentloaded' });
+await reloadHome(page);
 
 
 // --- 5. マイク感度 ---
@@ -310,7 +315,7 @@ ck('感度は保存される', await page.evaluate(() => JSON.parse(localStorage
 const thPos = await page.evaluate(() => document.querySelector('#mic-meter-th').style.left);
 ck('しきい値マーカーが表示される', /%$/.test(thPos), thPos);
 await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
-await page.reload({ waitUntil: 'domcontentloaded' });
+await reloadHome(page);
 
 
 // --- 6. マイク経路の通し確認（Chromium の疑似オーディオデバイスを使う） ---
@@ -350,7 +355,7 @@ await micBrowser.close();
 // --- 7. C譜 / 移調譜の切り替え ---
 async function useSettings(o) {
   await page.evaluate((s) => localStorage.setItem('saxchord.v1', JSON.stringify({ settings: s })), o);
-  await page.reload({ waitUntil: 'domcontentloaded' });
+  await reloadHome(page);
 }
 const badgeOf = async (mode) => {
   await page.click('[data-nav="home"]');
@@ -396,7 +401,7 @@ await page.waitForTimeout(150);
 ck('C譜を選ぶと保存される', await page.evaluate(() => JSON.parse(localStorage.getItem('saxchord.v1')).settings.chartPitch) === 'concert');
 ck('ホームの説明もC譜になる', /C譜/.test(await page.locator('#home-note').textContent()));
 await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
-await page.reload({ waitUntil: 'domcontentloaded' });
+await reloadHome(page);
 
 
 // --- 8. 画面の作り（トップバー・使い方・運指図） ---
@@ -524,7 +529,7 @@ ck('高い倍音ほど弱い', sound.h[5] < sound.h[1], JSON.stringify(sound.h.m
 
 // --- 12. 吹いて答える：音を隠すモードと通し再生 ---
 await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
-await page.reload({ waitUntil: 'domcontentloaded' });
+await reloadHome(page);
 await page.click('[data-mode="play"]');
 await page.waitForSelector('#play-body .qcard');
 ck('通常は構成音が見えている', (await page.locator('.pchip-q').count()) === 0
@@ -580,7 +585,7 @@ ck('最後だけ長い（たたたん）', lick.length === 4 && lick[3] > lick[0
 
 // --- 13. コード表 ---
 await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
-await page.reload({ waitUntil: 'domcontentloaded' });
+await reloadHome(page);
 await page.click('[data-nav="chords"]');
 await page.waitForSelector('#screen-chords.active .cdetail');
 ck('コード表にルート14個', await page.locator('.root-btn').count() === 14);
@@ -636,6 +641,56 @@ await page.click('[data-nav="chords"]');
 await page.waitForTimeout(300);
 const notEmpty = await page.evaluate(() => document.querySelector('#chords-wrap').children.length);
 ck('コード表が空でない', notEmpty >= 3, String(notEmpty));
+
+
+// --- 15. ブラウザの戻る/進む ---
+await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
+await page.goto('http://localhost:8931/index.html', { waitUntil: 'domcontentloaded' });
+ck('起動時のURLはホーム', (await page.evaluate(() => location.hash)) === '#/home',
+  await page.evaluate(() => location.hash));
+await page.click('[data-mode="degree"]');
+await page.waitForSelector('#screen-quiz.active');
+ck('クイズを開くとURLが変わる', (await page.evaluate(() => location.hash)) === '#/quiz/degree',
+  await page.evaluate(() => location.hash));
+await page.click('#tb-help');
+await page.waitForSelector('#screen-help.active');
+ck('使い方のURL', (await page.evaluate(() => location.hash)) === '#/help');
+await page.goBack();
+await page.waitForTimeout(250);
+ck('戻るでクイズに戻る', await page.locator('#screen-quiz.active').count() === 1
+  && (await page.evaluate(() => location.hash)) === '#/quiz/degree',
+  await page.evaluate(() => location.hash));
+await page.goForward();
+await page.waitForTimeout(250);
+ck('進むで使い方に行ける', await page.locator('#screen-help.active').count() === 1);
+await page.goBack(); await page.waitForTimeout(200);
+await page.goBack(); await page.waitForTimeout(250);
+ck('さらに戻るとホーム', await page.locator('#screen-home.active').count() === 1
+  && (await page.evaluate(() => location.hash)) === '#/home');
+// 直リンク
+await page.goto('http://localhost:8931/index.html#/chords', { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(300);
+ck('直リンクでコード表を開ける', await page.locator('#screen-chords.active').count() === 1
+  && (await page.locator('#chords-wrap .cdetail').count()) === 1);
+await page.goto('http://localhost:8931/index.html#/quiz/tones', { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(300);
+ck('直リンクでクイズのモードまで指定できる', await page.locator('#screen-quiz.active').count() === 1
+  && (await page.evaluate(() => window.SaxChord.Quiz.mode)) === 'tones');
+ck('画面ごとにタイトルが変わる', /クイズ/.test(await page.title()), await page.title());
+// 吹いて答えるで次のコードに進んでも履歴が増えない
+await page.goto('http://localhost:8931/index.html#/home', { waitUntil: 'domcontentloaded' });
+await page.click('[data-mode="play"]');
+await page.waitForSelector('#screen-play.active');
+await page.click('#play-next'); await page.waitForTimeout(200);
+await page.click('#play-next'); await page.waitForTimeout(200);
+await page.goBack(); await page.waitForTimeout(300);
+ck('コードを進めても戻るは1回でホーム', await page.locator('#screen-home.active').count() === 1);
+// 楽器シートは戻るで閉じる
+await page.click('#inst-badge');
+await page.waitForSelector('#quick-sheet:not([hidden])');
+await page.goBack(); await page.waitForTimeout(250);
+ck('戻るで楽器シートだけ閉じる', await page.locator('#quick-sheet[hidden]').count() === 1
+  && await page.locator('#screen-home.active').count() === 1);
 
 ck('JSエラーなし', errs.length===0 && errs2.length===0, JSON.stringify(errs.concat(errs2)));
 

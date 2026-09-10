@@ -1008,7 +1008,8 @@ document.addEventListener("keydown", (e) => {
 
 const Play = {
   chord: null, wt: [], midis: [], idx: 0, done: [], hold: 0, n: 0, ok: 0,
-  order: "up", listening: false, sinceTarget: 0, armed: false, reveal: false, cleared: false
+  order: "up", listening: false, sinceTarget: 0, armed: false, reveal: false, cleared: false,
+  concertMode: false
 };
 
 // 判定は感度設定より厳しめの下限を使う。
@@ -1019,9 +1020,11 @@ const ACCEPT_CLARITY = 0.62;
 const ACCEPT_FRAMES = 6;         // 約 0.2 秒
 const TARGET_GRACE_MS = 350;     // 次の音に移った直後は判定しない（前の音の余韻よけ）
 
-function startPlayMode(chord) {
+function startPlayMode(chord, opts) {
+  const o = opts || {};
   Play.chord = chord || newChord();
-  Play.wt = writtenTones(Play.chord);
+  Play.concertMode = !!o.concert;
+  Play.wt = o.wt ? o.wt.slice() : writtenTones(Play.chord);
   Play.midis = voiceChord(Play.wt);
   if (Play.order === "random") {
     const idx = shuffle(Play.wt.map((_, i) => i));
@@ -1146,7 +1149,7 @@ function renderPlay(cleared) {
 
   body.innerHTML = `
     <div class="qcard">
-      <div class="q-label">この音を順番に吹く ${pitchBadge()}</div>
+      <div class="q-label">この音を順番に吹く ${Play.concertMode ? '<span class="badge badge-concert">実音</span>' : pitchBadge()}</div>
       <div class="q-main">${pretty(Play.chord.label)}</div>
       <div class="q-sub">${hide ? esc(Play.chord.type.jp) + " ／ 構成音は表示していません" : "&nbsp;"}</div>
       <div class="pchips">${chips}</div>
@@ -1211,7 +1214,8 @@ $("#play-body").addEventListener("click", (e) => {
   }
   if (e.target.closest("#play-order")) {
     Play.order = Play.order === "up" ? "random" : "up";
-    startPlayMode(Play.chord); return;
+    startPlayMode(Play.chord, Play.concertMode ? { wt: chordTableTones(Play.chord), concert: true } : null);
+    return;
   }
   if (e.target.closest("#play-next")) { Play.cleared = false; startPlayMode(newChord()); return; }
 });
@@ -1315,11 +1319,38 @@ function handleMicPanelClick(e) {
 
 const ChordTable = { root: "C", typeId: "maj7" };
 
+// コード表は「実音（C譜）」で引く。譜面の設定に関わらず、
+// 見出しと構成音は実音で書き、その下に自分が吹く音（記譜）と運指を出す。
+function chordTableTones(chord) {
+  const i = inst();
+  return chord.tones.map((t) => {
+    const name = transposeName(t.name, i.semi, i.step);
+    return { deg: t.deg, name, pc: nameToPc(name), concert: t.name };
+  });
+}
+
+function ctCardHTML(wtone, midi) {
+  const alt = altFingeringFor(midi);
+  return `<div class="fcard">
+    <div class="fcard-head">
+      <span class="fcard-deg">${esc(degLabel(wtone.deg))}</span>
+      <span class="fcard-note">${pretty(wtone.concert)}</span>
+    </div>
+    <div class="fcard-play">吹く音 <b>${pretty(wtone.name)}</b></div>
+    ${fingeringSVG(midi)}
+    <div class="fcard-foot">
+      <span>記譜 ${esc(midiToName(midi, /b/.test(wtone.name)))}</span>
+      <span class="dim">実音 ${esc(commonLabel(concertMidi(midi)))}</span>
+    </div>
+    ${alt ? `<div class="fcard-alt">別指: ${esc(alt.note)}</div>` : ""}
+  </div>`;
+}
+
 function renderChords() {
   const wrap = $("#chords-wrap");
   const type = TYPE_BY_ID[ChordTable.typeId] || TYPE_BY_ID.maj7;
-  const chord = buildChord(ChordTable.root, type);
-  const wt = writtenTones(chord);
+  const chord = buildChord(ChordTable.root, type);      // ここでのコードは実音
+  const wt = chordTableTones(chord);
   const midis = voiceChord(wt);
 
   const roots = ROOTS_MAIN.concat(ROOTS_EXTRA).map((r) =>
@@ -1331,23 +1362,21 @@ function renderChords() {
         `<button class="ctype ${t.id === ChordTable.typeId ? "on" : ""}" data-ctype="${t.id}" type="button">${pretty(t.suffix || "（メジャー）")}</button>`).join("")}</div>
     </div>`;
 
-  const concertLine = usesConcertChart()
-    ? `<div class="ap-line"><span class="ap-key">C譜（実音）</span>${chord.tones.map((t) => noteHTML(t.name)).join('<span class="sep">·</span>')}</div>`
-    : `<div class="ap-line"><span class="ap-key">実音</span>${chord.tones.map((t) => noteHTML(toConcertName(t.name))).join('<span class="sep">·</span>')}</div>`;
-
   wrap.innerHTML = `
+    <p class="ct-lead">実音（C譜）で引きます。ピアノやギターと同じ、原曲キーのコード名です。</p>
     <div class="root-row">${roots}</div>
     ${typeGroup(1, "レベル1")}${typeGroup(2, "レベル2")}${typeGroup(3, "レベル3")}
 
     <div class="cdetail">
       <div class="ap-head">
         <span class="ap-chord">${pretty(chord.label)}<span class="ap-jp">${esc(type.jp)}</span></span>
-        ${pitchBadge()}
+        <span class="badge badge-concert">実音</span>
       </div>
-      <div class="ap-line"><span class="ap-key">${usesConcertChart() ? "吹く音" : "構成音"}</span>${
-        wt.map((t) => `<span class="tone"><span class="tone-deg">${esc(degLabel(t.deg))}</span>${noteHTML(t.name)}</span>`).join("")}</div>
-      ${concertLine}
-      <div class="fcards">${wt.map((t, i) => fingerCardHTML(t, midis[i])).join("")}</div>
+      <div class="ct-main-line">${
+        chord.tones.map((t) => `<span class="tone tone-big"><span class="tone-deg">${esc(degLabel(t.deg))}</span>${noteHTML(t.name)}</span>`).join("")}</div>
+      <div class="ap-line"><span class="ap-key">${esc(scoreName())}で吹く音</span>${
+        wt.map((t) => noteHTML(t.name)).join('<span class="sep">·</span>')}</div>
+      <div class="fcards">${wt.map((t, i) => ctCardHTML(t, midis[i])).join("")}</div>
       <div class="ap-actions">
         <button class="btn btn-ghost" id="ct-play" type="button">♪ 1音ずつ</button>
         <button class="btn btn-ghost" id="ct-lick" type="button">♪ 通して聴く</button>
@@ -1364,10 +1393,12 @@ $("#chords-wrap").addEventListener("click", (e) => {
   if (t) { ChordTable.typeId = t.dataset.ctype; renderChords(); return; }
   const type = TYPE_BY_ID[ChordTable.typeId] || TYPE_BY_ID.maj7;
   const chord = buildChord(ChordTable.root, type);
-  const midis = voiceChord(writtenTones(chord));
+  const wt = chordTableTones(chord);
+  const midis = voiceChord(wt);
   if (e.target.closest("#ct-play")) { playWrittenMidis(midis, { chord: true }); return; }
   if (e.target.closest("#ct-lick")) { playLick(midis); return; }
-  if (e.target.closest("#ct-blow")) { startPlayMode(chord); return; }
+  // コード表は実音で引いているので、その前提のまま吹く練習へ渡す
+  if (e.target.closest("#ct-blow")) { startPlayMode(chord, { wt, concert: true }); return; }
 });
 
 /* ===================== 12. 運指表 ===================== */

@@ -391,3 +391,12 @@ button{font-family:inherit; color:inherit;}
   box-shadow:var(--shadow); padding:14px;}
 .cdetail .ap-head{justify-content:space-between;}
 .cdetail .fcards{padding-top:14px;}
+
+.ct-lead{font-size:12px; color:var(--ink-soft); background:var(--surface-2); border-radius:10px;
+  padding:8px 11px; margin:0 0 12px;}
+.ct-main-line{display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 10px;}
+.tone-big{background:var(--accent-soft); padding:6px 12px; border-radius:11px;}
+.tone-big .note{font-size:24px;}
+.tone-big .tone-deg{font-size:11px;}
+.fcard-play{font-size:10.5px; color:var(--ink-soft); text-align:center; padding:2px 0 4px;}
+.fcard-play b{font-family:"Bodoni Moda","Times New Roman",Georgia,serif; font-size:14px; color:var(--ink);}

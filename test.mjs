@@ -591,12 +591,21 @@ await page.click('.ctype[data-ctype="m7b5"]');
 await page.waitForTimeout(200);
 const ct = await page.evaluate(() => ({
   title: document.querySelector('.cdetail .ap-chord').textContent,
-  tones: [...document.querySelectorAll('.cdetail .ap-line .tone')].map(e => e.textContent),
+  badge: document.querySelector('.cdetail .badge').textContent,
+  tones: [...document.querySelectorAll('.cdetail .ct-main-line .tone')].map(e => e.textContent),
+  playKey: document.querySelector('.cdetail .ap-line .ap-key').textContent,
+  playNotes: [...document.querySelectorAll('.cdetail .ap-line .note')].map(e => e.textContent.replace(/[^A-G♯♭𝄫]/g, '')),
+  cardHead: document.querySelector('.cdetail .fcard .fcard-note').textContent,
+  cardPlay: document.querySelector('.cdetail .fcard-play b').textContent,
   figs: document.querySelectorAll('.cdetail .fcard .fk').length,
   quizSame: document.querySelectorAll('.cdetail .fcard .fk-base').length
 }));
 ck('選んだコードが出る', /E♭m7\(♭5\)/.test(ct.title), ct.title);
-ck('構成音は E♭ G♭ B𝄫 D♭', ct.tones.length === 4 && /E♭/.test(ct.tones[0]) && /D♭/.test(ct.tones[3]), JSON.stringify(ct.tones));
+ck('実音であることを明示', ct.badge === '実音', ct.badge);
+ck('主役は実音の構成音 E♭ G♭ B𝄫 D♭', ct.tones.length === 4 && /E♭/.test(ct.tones[0]) && /D♭/.test(ct.tones[3]), JSON.stringify(ct.tones));
+ck('吹く音を併記する（アルトなら C から）', /E♭譜で吹く音/.test(ct.playKey) && ct.playNotes[0] === 'C', JSON.stringify(ct));
+ck('運指カードの見出しも実音', ct.cardHead === 'E♭', ct.cardHead);
+ck('運指カードに吹く音を添える', ct.cardPlay === 'C', ct.cardPlay);
 ck('構成音ぶんの運指図が出る', ct.figs === 4, JSON.stringify(ct));
 ck('運指図はクイズと同じ仕組み', ct.quizSame === 4, JSON.stringify(ct));
 // そのまま吹く練習へ渡せる
@@ -604,6 +613,8 @@ await page.click('#ct-blow');
 await page.waitForTimeout(300);
 ck('「これを吹く」で吹いて答えるに移る', await page.locator('#screen-play.active').count() === 1
   && /E♭m7/.test(await page.locator('#play-body .q-main').textContent()));
+ck('渡した先も実音の前提を保つ', /実音/.test(await page.locator('#play-body .q-label').textContent())
+  && (await page.evaluate(() => window.SaxChord.Play.wt.map(t => t.name).join(' '))) === 'C Eb Gb Bb');
 
 
 // --- 14. 配信まわり（古いキャッシュで画面が空になるのを防ぐ） ---

@@ -3,80 +3,41 @@
    画面が真っ白のまま止まる（オフラインで使う前提のアプリなので致命的）。 */
 
 :root{
+  /* 既定は藍。ライトのみ（練習中の視認性を優先して端末のダークには追従しない） */
+  color-scheme: light;
+  --bg:#F2F4F8; --surface:#FFFFFF; --surface-2:#E7EBF2; --surface-3:#DAE0EB;
+  --ink:#161C28; --ink-soft:#4C566B; --ink-faint:#7E88A0;
+  --accent:#2B4C8C; --accent-soft:#DDE5F5; --accent-ink:#17305E;
+  --ok:#1F7A5A; --ok-soft:#D8EFE6; --ng:#B23A48; --ng-soft:#F8E1E4;
+  --line:#D3DAE6; --shadow:0 1px 2px rgba(22,28,40,.06), 0 10px 28px rgba(22,28,40,.08);
+  --radius:16px;
+}
+
+/* --- 真鍮 --- */
+:root[data-palette="brass"]{
   --bg:#F6F4EF; --surface:#FFFFFF; --surface-2:#EDEAE1; --surface-3:#E2DED2;
   --ink:#1D1B16; --ink-soft:#5A5445; --ink-faint:#8B8471;
   --accent:#9A6B12; --accent-soft:#F2E4C6; --accent-ink:#5E3F05;
   --ok:#2E7D53; --ok-soft:#DCEFE3; --ng:#C0392B; --ng-soft:#FBE3DF;
   --line:#DDD8C9; --shadow:0 1px 2px rgba(29,27,22,.06), 0 10px 28px rgba(29,27,22,.08);
-  --radius:16px;
-}
-@media (prefers-color-scheme: dark){
-  :root{
-    --bg:#14130F; --surface:#1E1C17; --surface-2:#272419; --surface-3:#312D20;
-    --ink:#F0EDE3; --ink-soft:#B6AF9B; --ink-faint:#847D6B;
-    --accent:#D9A94A; --accent-soft:#3A3016; --accent-ink:#F2DCA8;
-    --ok:#5BC08B; --ok-soft:#1D3428; --ng:#E8796B; --ng-soft:#3A211C;
-    --line:#332F23; --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.45);
-  }
 }
 
-/* =========================================================================
-   カラーテーマ。:root が既定（真鍮）で、data-palette で差し替える。
-   ライト／ダークの両方を各テーマで定義する。
-   ========================================================================= */
-
-/* --- 藍：ジャズクラブの夜。落ち着いた紺に真鍮のアクセント --- */
-:root[data-palette="midnight"]{
-  --bg:#F2F4F8; --surface:#FFFFFF; --surface-2:#E7EBF2; --surface-3:#DAE0EB;
-  --ink:#161C28; --ink-soft:#4C566B; --ink-faint:#7E88A0;
-  --accent:#2B4C8C; --accent-soft:#DDE5F5; --accent-ink:#17305E;
-  --ok:#1F7A5A; --ok-soft:#D8EFE6; --ng:#B23A48; --ng-soft:#F8E1E4;
-  --line:#D3DAE6;
-}
-@media (prefers-color-scheme: dark){
-  :root[data-palette="midnight"]{
-    --bg:#0D1220; --surface:#161D2E; --surface-2:#1E2739; --surface-3:#28334A;
-    --ink:#E8EDF7; --ink-soft:#A6B1C7; --ink-faint:#78849C;
-    --accent:#7FA8F0; --accent-soft:#1D2B47; --accent-ink:#C6D9FF;
-    --ok:#59C79C; --ok-soft:#12312A; --ng:#E8808D; --ng-soft:#371F25;
-    --line:#2A3448;
-  }
-}
-
-/* --- 朱：墨と朱。和のコントラスト --- */
+/* --- 朱：墨と朱 --- */
 :root[data-palette="vermilion"]{
   --bg:#F7F5F2; --surface:#FFFFFF; --surface-2:#EDE9E4; --surface-3:#E0DBD3;
   --ink:#1A1815; --ink-soft:#544E47; --ink-faint:#8A8279;
   --accent:#C4432B; --accent-soft:#FADFD8; --accent-ink:#8A2C18;
   --ok:#2F7D4F; --ok-soft:#DDEFE2; --ng:#A83232; --ng-soft:#F8E0E0;
-  --line:#DBD5CC;
-}
-@media (prefers-color-scheme: dark){
-  :root[data-palette="vermilion"]{
-    --bg:#131110; --surface:#1D1A18; --surface-2:#262220; --surface-3:#312C29;
-    --ink:#F2EEE9; --ink-soft:#B4ACA3; --ink-faint:#847C73;
-    --accent:#F0705A; --accent-soft:#3A1E18; --accent-ink:#FFC7B8;
-    --ok:#5FC084; --ok-soft:#16301F; --ng:#E8706F; --ng-soft:#38201F;
-    --line:#332E2A;
-  }
+  --line:#DBD5CC; --shadow:0 1px 2px rgba(26,24,21,.06), 0 10px 28px rgba(26,24,21,.08);
 }
 
-/* --- 黒板：グラファイトにライム。道具っぽい見た目 --- */
+/* --- 黒板：グラファイトに緑 --- */
 :root[data-palette="graphite"]{
   --bg:#F4F5F4; --surface:#FFFFFF; --surface-2:#E8EAE8; --surface-3:#DBDEDB;
   --ink:#15181A; --ink-soft:#4A5155; --ink-faint:#7C858A;
   --accent:#3E7C3A; --accent-soft:#DEEEDA; --accent-ink:#265122;
   --ok:#2C7A55; --ok-soft:#D9EFE4; --ng:#B33A34; --ng-soft:#F7E2E0;
-  --line:#D4D8D5;
-}
-@media (prefers-color-scheme: dark){
-  :root[data-palette="graphite"]{
-    --bg:#101211; --surface:#191C1B; --surface-2:#212524; --surface-3:#2B302E;
-    --ink:#EDF0EE; --ink-soft:#A8B0AC; --ink-faint:#79817E;
-    --accent:#9BD84F; --accent-soft:#25301A; --accent-ink:#D6F2A8;
-    --ok:#5AC98D; --ok-soft:#12301F; --ng:#E97C72; --ng-soft:#331E1C;
-    --line:#2A2F2D;
-  }
+  --line:#D4D8D5; --shadow:0 1px 2px rgba(21,24,26,.06), 0 10px 28px rgba(21,24,26,.08);
 }
 
 *{box-sizing:border-box;}

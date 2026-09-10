@@ -453,15 +453,26 @@ ck('ハイEはオクターブ＋パーム2つ＋サイドの塊', fig.hiE.hi ===
 await page.click('#tb-settings');
 await page.waitForSelector('.pal-row');
 ck('配色は4案', await page.locator('.pal').count() === 4);
-await page.click('.pal[data-pal="midnight"]');
-await page.waitForTimeout(150);
-ck('配色を変えると属性が付く', await page.evaluate(() => document.documentElement.getAttribute('data-palette')) === 'midnight');
-ck('配色が保存される', await page.evaluate(() => JSON.parse(localStorage.getItem('saxchord.v1')).settings.palette) === 'midnight');
-const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-ck('実際に色が変わる', bg === 'rgb(242, 244, 248)', bg);
+ck('既定は藍（属性なし）', await page.evaluate(() => !document.documentElement.hasAttribute('data-palette')));
+const bgDefault = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+ck('既定の背景は藍のもの', bgDefault === 'rgb(242, 244, 248)', bgDefault);
 await page.click('.pal[data-pal="brass"]');
+await page.waitForTimeout(150);
+ck('配色を変えると属性が付く', await page.evaluate(() => document.documentElement.getAttribute('data-palette')) === 'brass');
+ck('配色が保存される', await page.evaluate(() => JSON.parse(localStorage.getItem('saxchord.v1')).settings.palette) === 'brass');
+const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+ck('実際に色が変わる', bg === 'rgb(246, 244, 239)', bg);
+await page.click('.pal[data-pal="midnight"]');
 await page.waitForTimeout(120);
 ck('既定に戻すと属性が外れる', await page.evaluate(() => document.documentElement.hasAttribute('data-palette')) === false);
+// ライトのみ：端末がダークでも明るいまま
+const darkCtx = await browser.newContext({ viewport: { width: 420, height: 900 }, colorScheme: 'dark' });
+const pd = await darkCtx.newPage();
+await pd.goto('http://localhost:8931/index.html', { waitUntil: 'domcontentloaded' });
+const darkBg = await pd.evaluate(() => getComputedStyle(document.body).backgroundColor);
+const darkInk = await pd.evaluate(() => getComputedStyle(document.body).color);
+ck('端末がダークでもライトのまま', darkBg === 'rgb(242, 244, 248)' && darkInk === 'rgb(22, 28, 40)', darkBg + ' / ' + darkInk);
+await darkCtx.close();
 
 // --- 10. 吹いて答える：誤検出で勝手に進まない ---
 const guard = await page.evaluate(() => {

@@ -270,18 +270,19 @@ const DEFAULT_SETTINGS = {
   // と見なす自己相関の下限。どちらも小さいほど敏感。
   micGate: 0.006,
   micClarity: 0.55,
-  palette: "brass",
+  palette: "midnight",
   playHide: false          // 吹いて答える：音名と運指を隠す
 };
 
 const PALETTES = [
-  { id: "brass", jp: "真鍮", sw: ["#F6F4EF", "#9A6B12", "#1D1B16"] },
   { id: "midnight", jp: "藍", sw: ["#F2F4F8", "#2B4C8C", "#161C28"] },
+  { id: "brass", jp: "真鍮", sw: ["#F6F4EF", "#9A6B12", "#1D1B16"] },
   { id: "vermilion", jp: "朱", sw: ["#F7F5F2", "#C4432B", "#1A1815"] },
   { id: "graphite", jp: "黒板", sw: ["#F4F5F4", "#3E7C3A", "#15181A"] }
 ];
+// 藍が既定なので、それ以外のときだけ属性を付ける
 function applyPalette() {
-  if (S.palette && S.palette !== "brass") document.documentElement.setAttribute("data-palette", S.palette);
+  if (S.palette && S.palette !== "midnight") document.documentElement.setAttribute("data-palette", S.palette);
   else document.documentElement.removeAttribute("data-palette");
 }
 

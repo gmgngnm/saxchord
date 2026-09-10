@@ -19,12 +19,20 @@
 
   <header class="topbar">
     <button class="brand" data-nav="home" type="button" aria-label="ホームへ">
-      <span class="brand-mark" aria-hidden="true">♭♯</span>
       <span class="brand-name">SaxChord</span>
     </button>
     <div class="topbar-right">
       <button class="inst-badge" id="inst-badge" type="button" aria-haspopup="dialog">アルト (E♭)</button>
-      <button class="icon-btn" data-nav="settings" type="button" title="設定" aria-label="設定">
+      <button class="icon-btn" id="tb-help" type="button" title="使い方" aria-label="使い方">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><line x1="12" y1="17.5" x2="12" y2="17.5"/></svg>
+      </button>
+      <button class="icon-btn" id="tb-home" type="button" title="ホーム" aria-label="ホーム">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+      </button>
+      <button class="icon-btn" id="tb-back" type="button" title="戻る" aria-label="戻る">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <button class="icon-btn" id="tb-settings" type="button" title="設定" aria-label="設定">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
     </div>
@@ -32,11 +40,6 @@
 
   <!-- ============ ホーム ============ -->
   <section id="screen-home" class="screen active">
-    <div class="hero">
-      <h1 class="hero-title">コードを、指で覚える。</h1>
-      <p class="hero-sub">クイズ → 答え合わせ → 運指図 → 実際に吹いてマイク判定。<br>移調（E♭/B♭管）は自動で処理します。</p>
-    </div>
-
     <div class="mode-grid">
       <button class="mode-card" data-mode="tones" type="button">
         <span class="mode-icon" aria-hidden="true">♬</span>
@@ -93,7 +96,6 @@
   <!-- ============ クイズ ============ -->
   <section id="screen-quiz" class="screen">
     <div class="quiz-head">
-      <button class="back-btn" data-nav="home" type="button">‹ ホーム</button>
       <div class="score-line">
         <span id="score-text">0 / 0</span>
         <span class="streak" id="streak-text"></span>
@@ -105,7 +107,6 @@
   <!-- ============ 吹いて答える ============ -->
   <section id="screen-play" class="screen">
     <div class="quiz-head">
-      <button class="back-btn" data-nav="home" type="button">‹ ホーム</button>
       <div class="score-line"><span id="play-score-text">0 / 0</span></div>
     </div>
     <div class="quiz-body" id="play-body"></div>
@@ -114,7 +115,6 @@
   <!-- ============ 運指表 ============ -->
   <section id="screen-chart" class="screen">
     <div class="quiz-head">
-      <button class="back-btn" data-nav="home" type="button">‹ ホーム</button>
       <h2 class="screen-title">運指表</h2>
     </div>
     <div class="chart-wrap" id="chart-wrap"></div>
@@ -123,7 +123,6 @@
   <!-- ============ チューナー ============ -->
   <section id="screen-tuner" class="screen">
     <div class="quiz-head">
-      <button class="back-btn" data-nav="home" type="button">‹ ホーム</button>
       <h2 class="screen-title">チューナー / 音当て</h2>
     </div>
     <div class="tuner-wrap" id="tuner-wrap"></div>
@@ -132,16 +131,20 @@
   <!-- ============ 成績 ============ -->
   <section id="screen-stats" class="screen">
     <div class="quiz-head">
-      <button class="back-btn" data-nav="home" type="button">‹ ホーム</button>
       <h2 class="screen-title">成績</h2>
     </div>
     <div class="stats-wrap" id="stats-wrap"></div>
   </section>
 
+  <!-- ============ 使い方 ============ -->
+  <section id="screen-help" class="screen">
+    <div class="quiz-head"><h2 class="screen-title">使い方</h2></div>
+    <div class="help-wrap" id="help-wrap"></div>
+  </section>
+
   <!-- ============ 設定 ============ -->
   <section id="screen-settings" class="screen">
     <div class="quiz-head">
-      <button class="back-btn" data-nav="home" type="button">‹ ホーム</button>
       <h2 class="screen-title">設定</h2>
     </div>
     <div class="settings-wrap" id="settings-wrap"></div>

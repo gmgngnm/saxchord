@@ -187,7 +187,7 @@ await page.screenshot({ path: path.join(SHOTS, 'shot-chart.png'), fullPage: true
 await page.click('[data-nav="home"]'); await page.click('[data-nav="stats"]');
 await page.waitForTimeout(150);
 ck('成績画面が出る', await page.locator('.stat-top').count() === 1);
-await page.click('[data-nav="home"]'); await page.click('[data-nav="settings"]');
+await page.click('[data-nav="home"]'); await page.click('#tb-settings');
 await page.waitForTimeout(150);
 ck('設定にコード一覧', await page.locator('.chk[class*="chk"] .chk-name').count() >= 24);
 await page.click('[data-inst="tenor"]');
@@ -269,7 +269,7 @@ ck('小さい音は厳しいしきい値だと弾かれる', sens.strictGate ===
 ck('しきい値を下げれば同じ小さい音を検出できる', Math.abs(sens.looseGate - 330) < 3, sens.looseGate);
 ck('初期値は以前(0.012)より敏感', sens.defaultGate < 0.012, sens.defaultGate);
 
-await page.click('[data-nav="home"]'); await page.click('[data-nav="settings"]');
+await page.click('[data-nav="home"]'); await page.click('#tb-settings');
 await page.waitForSelector('.mic-cal');
 ck('設定に感度パネルがある（7段階）', await page.locator('.mic-cal .sens').count() === 7);
 ck('自動調整ボタンがある', await page.locator('#mic-auto').count() === 1);
@@ -378,13 +378,13 @@ const cInst = await page.evaluate(() => {
 ck('C管では吹く音＝コードの音（移調ゼロ）', cInst.tones === cInst.written && cInst.written === 'Eb G Bb D', JSON.stringify(cInst));
 
 // C 管のときは譜面の選択肢を出さない（意味がないので）
-await page.click('[data-nav="home"]'); await page.click('[data-nav="settings"]');
+await page.click('[data-nav="home"]'); await page.click('#tb-settings');
 await page.waitForSelector('.settings-wrap, #settings-wrap');
 ck('C管では譜面の切替ボタンを出さない', await page.locator('[data-pitch]').count() === 0);
 ck('C管では理由を説明する', /C 管なので/.test(await page.locator('#settings-wrap').textContent()));
 
 await useSettings({ instrument:'alto', chartPitch:'written', types:['maj7'], roots:['C'], sound:false });
-await page.click('[data-nav="settings"]');
+await page.click('#tb-settings');
 await page.waitForSelector('[data-pitch]');
 const segs = await page.$$eval('[data-pitch]', els => els.map(e => e.textContent.trim()));
 ck('設定に C譜 の選択肢が名前つきで出る', segs.some(x => /^C譜/.test(x)) && segs.some(x => /^E♭譜/.test(x)), JSON.stringify(segs));
@@ -394,6 +394,77 @@ ck('C譜を選ぶと保存される', await page.evaluate(() => JSON.parse(local
 ck('ホームの説明もC譜になる', /C譜/.test(await page.locator('#home-note').textContent()));
 await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
 await page.reload({ waitUntil: 'domcontentloaded' });
+
+
+// --- 8. 画面の作り（トップバー・使い方・運指図） ---
+await page.click('[data-nav="home"]');
+await page.waitForTimeout(150);
+ck('ホームでは設定ボタンだけ', await page.locator('#tb-settings').isVisible()
+  && !(await page.locator('#tb-home').isVisible()) && !(await page.locator('#tb-back').isVisible())
+  && !(await page.locator('#tb-help').isVisible()));
+await page.click('[data-mode="degree"]');
+await page.waitForSelector('.qcard');
+ck('クイズ画面はホームと使い方ボタン', await page.locator('#tb-home').isVisible() && await page.locator('#tb-help').isVisible());
+ck('クイズ画面に設定ボタンは出さない', !(await page.locator('#tb-settings').isVisible()));
+await page.click('#tb-help');
+await page.waitForSelector('#screen-help.active');
+ck('使い方ページが開く', (await page.locator('.help-h').count()) >= 4);
+ck('使い方に運指図の凡例がある', await page.locator('.help-fing .fing-labeled').count() === 1);
+ck('運指図のキー名が出ている', (await page.locator('.help-fing .kn').count()) >= 12);
+ck('使い方では戻るボタンだけ', await page.locator('#tb-back').isVisible()
+  && !(await page.locator('#tb-settings').isVisible()) && !(await page.locator('#tb-help').isVisible())
+  && !(await page.locator('#tb-home').isVisible()));
+await page.click('#tb-back');
+await page.waitForTimeout(200);
+ck('使い方から元のクイズに戻る', await page.locator('#screen-quiz.active').count() === 1);
+await page.click('#tb-home'); await page.waitForTimeout(150);
+await page.click('#tb-settings');
+await page.waitForSelector('#screen-settings.active');
+ck('設定画面では設定ボタンが消えて戻るになる', !(await page.locator('#tb-settings').isVisible())
+  && await page.locator('#tb-back').isVisible());
+await page.click('#tb-back'); await page.waitForTimeout(150);
+ck('戻るでホームに戻る', await page.locator('#screen-home.active').count() === 1);
+ck('ホームの見出し説明を削除', await page.locator('.hero').count() === 0);
+ck('ブランドマークを削除', await page.locator('.brand-mark').count() === 0);
+
+// 運指図：キーの形が描き分けられている
+const shapes = await page.evaluate(() => {
+  document.body.insertAdjacentHTML('beforeend', `<div id="tmp">${window.SaxChord.__svg(70, { labels: true })}</div>`);
+  const svg = document.querySelector('#tmp svg');
+  const r = { pearls: svg.querySelectorAll('circle.pearl').length, pads: svg.querySelectorAll('rect.k').length,
+    ovals: svg.querySelectorAll('ellipse.k').length, leaf: svg.querySelectorAll('path.k').length,
+    on: [...svg.querySelectorAll('.k.on')].length };
+  document.querySelector('#tmp').remove();
+  return r;
+});
+ck('主要キーは大きな丸6つ', shapes.pearls === 6, JSON.stringify(shapes));
+ck('パームキーは小判形', shapes.ovals === 3, JSON.stringify(shapes));
+ck('サイド／小指キーは板状', shapes.pads === 10, JSON.stringify(shapes));
+ck('オクターブキーは葉の形', shapes.leaf === 1, JSON.stringify(shapes));
+ck('B♭(bis)は2キーだけ点灯', shapes.on === 2, JSON.stringify(shapes));
+
+// --- 9. 配色テーマ ---
+await page.click('#tb-settings');
+await page.waitForSelector('.pal-row');
+ck('配色は4案', await page.locator('.pal').count() === 4);
+await page.click('.pal[data-pal="midnight"]');
+await page.waitForTimeout(150);
+ck('配色を変えると属性が付く', await page.evaluate(() => document.documentElement.getAttribute('data-palette')) === 'midnight');
+ck('配色が保存される', await page.evaluate(() => JSON.parse(localStorage.getItem('saxchord.v1')).settings.palette) === 'midnight');
+const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+ck('実際に色が変わる', bg === 'rgb(242, 244, 248)', bg);
+await page.click('.pal[data-pal="brass"]');
+await page.waitForTimeout(120);
+ck('既定に戻すと属性が外れる', await page.evaluate(() => document.documentElement.hasAttribute('data-palette')) === false);
+
+// --- 10. 吹いて答える：誤検出で勝手に進まない ---
+const guard = await page.evaluate(() => {
+  const A = window.SaxChord;
+  return { acceptClarity: A.acceptRules().clarity, frames: A.acceptRules().frames, grace: A.acceptRules().grace };
+});
+ck('判定は感度設定より厳しい下限を使う', guard.acceptClarity >= 0.6, JSON.stringify(guard));
+ck('判定には連続フレームが必要', guard.frames >= 6, JSON.stringify(guard));
+ck('音が変わった直後は判定しない猶予がある', guard.grace >= 300, JSON.stringify(guard));
 
 ck('JSエラーなし', errs.length===0 && errs2.length===0, JSON.stringify(errs.concat(errs2)));
 

@@ -187,53 +187,78 @@ function altFingeringFor(midi) {
   return null;
 }
 
-/* 運指図のレイアウト（縦長の模式図） */
+/* 運指図のレイアウト。
+   実物のキーの形と位置に寄せる（大きな丸＝真珠の付いた主要キー、
+   細長い葉＝オクターブキー、小判形＝パームキー、板＝サイド／小指のキー）。
+   どこがどのキーか、形と位置で分かるようにするのが狙い。 */
 const KEY_LAYOUT = [
-  { id: "palmF", shape: "pill", x: 18, y: 26, w: 34, h: 15, label: "F" },
-  { id: "palmEb", shape: "pill", x: 18, y: 47, w: 34, h: 15, label: "E♭" },
-  { id: "palmD", shape: "pill", x: 18, y: 68, w: 34, h: 15, label: "D" },
-  { id: "frontF", shape: "dot", cx: 100, cy: 62, r: 7.5, label: "F" },
-  { id: "oct", shape: "pill", x: 20, y: 96, w: 32, h: 16, label: "Oct" },
-  { id: "L1", shape: "hole", cx: 100, cy: 102, r: 14, label: "1" },
-  { id: "bis", shape: "dot", cx: 100, cy: 124, r: 7, label: "bis" },
-  { id: "L2", shape: "hole", cx: 100, cy: 146, r: 14, label: "2" },
-  { id: "L3", shape: "hole", cx: 100, cy: 186, r: 14, label: "3" },
-  { id: "gs", shape: "pill", x: 30, y: 196, w: 30, h: 14, label: "G♯" },
-  { id: "csL", shape: "pill", x: 30, y: 214, w: 30, h: 14, label: "C♯" },
-  { id: "bL", shape: "pill", x: 30, y: 232, w: 30, h: 14, label: "B" },
-  { id: "bbL", shape: "pill", x: 30, y: 250, w: 30, h: 14, label: "B♭" },
-  { id: "highFs", shape: "pill", x: 140, y: 168, w: 34, h: 14, label: "F♯" },
-  { id: "sideE", shape: "pill", x: 140, y: 194, w: 34, h: 14, label: "E" },
-  { id: "sideC", shape: "pill", x: 140, y: 214, w: 34, h: 14, label: "C" },
-  { id: "sideBb", shape: "pill", x: 140, y: 234, w: 34, h: 14, label: "B♭" },
-  { id: "R1", shape: "hole", cx: 100, cy: 262, r: 14, label: "1" },
-  { id: "fs", shape: "dot", cx: 124, cy: 284, r: 7, label: "F♯" },
-  { id: "R2", shape: "hole", cx: 100, cy: 302, r: 14, label: "2" },
-  { id: "R3", shape: "hole", cx: 100, cy: 342, r: 14, label: "3" },
-  { id: "ebR", shape: "pill", x: 132, y: 356, w: 32, h: 14, label: "E♭" },
-  { id: "cR", shape: "pill", x: 132, y: 376, w: 32, h: 14, label: "C" }
+  // 座標は saxfinger.png（138x326）から実測した位置をそのまま使う。
+  // 絵に無いキー（小指のテーブル・右手小指・F♯・ハイF♯・サイドの内訳）は
+  // 同じ描き方で足している。絵にあるものは位置も大きさも原画どおり。
+  { id: "palmF", shape: "oval", cx: 101, cy: 43, rx: 4.5, ry: 10.5, label: "パーム F", lx: 132, ly: 40 },
+  { id: "palmEb", shape: "oval", cx: 110.5, cy: 55, rx: 4.5, ry: 10.5, label: "パーム E♭", lx: 132, ly: 56 },
+  { id: "palmD", shape: "oval", cx: 101, cy: 68, rx: 4.5, ry: 10.5, label: "パーム D", lx: 132, ly: 72 },
+  { id: "oct", shape: "leaf", cx: 36, cy: 78.5, ry: 15, rx: 5.5, label: "オクターブ", lx: 26, ly: 81, anchor: "end" },
+  { id: "frontF", shape: "dot", cx: 72.5, cy: 30.5, r: 6, label: "フロント F", lx: 40, ly: 33, anchor: "end" },
+  { id: "L1", shape: "pearl", cx: 72.5, cy: 54.5, r: 15, label: "1" },
+  { id: "bis", shape: "dot", cx: 87.5, cy: 73, r: 6, label: "バイス B♭", lx: 132, ly: 95 },
+  { id: "L2", shape: "pearl", cx: 72.5, cy: 91.5, r: 15, label: "2" },
+  { id: "L3", shape: "pearl", cx: 72.5, cy: 128.5, r: 15, label: "3" },
+  // 左手小指のテーブル（G♯ が上、下に低 C♯・B・B♭ の山）
+  { id: "gs", shape: "cap", x: 39, y: 128, w: 9, h: 17, label: "G♯", lx: 34, ly: 138, anchor: "end" },
+  { id: "csL", shape: "cap", x: 50, y: 136, w: 9, h: 17, label: "低 C♯", lx: 34, ly: 152, anchor: "end" },
+  { id: "bL", shape: "cap", x: 39, y: 150, w: 9, h: 17, label: "低 B", lx: 34, ly: 166, anchor: "end" },
+  { id: "bbL", shape: "cap", x: 50, y: 158, w: 9, h: 17, label: "低 B♭", lx: 34, ly: 180, anchor: "end" },
+  // 右のサイドキー（原画では 1 つの塊なので、同じ枠の中を 4 段に割る）
+  { id: "highFs", shape: "pad", x: 99, y: 122, w: 26, h: 9, label: "ハイ F♯", lx: 132, ly: 129 },
+  { id: "sideE", shape: "pad", x: 99, y: 134, w: 26, h: 9, label: "側面 E", lx: 132, ly: 141 },
+  { id: "sideC", shape: "pad", x: 99, y: 146, w: 26, h: 9, label: "側面 C", lx: 132, ly: 153 },
+  { id: "sideBb", shape: "pad", x: 99, y: 158, w: 26, h: 9, label: "側面 B♭", lx: 132, ly: 165 },
+  { id: "R1", shape: "pearl", cx: 72.5, cy: 174.5, r: 15, label: "1" },
+  { id: "R2", shape: "pearl", cx: 72.5, cy: 211.5, r: 15, label: "2" },
+  { id: "fs", shape: "dot", cx: 92, cy: 230, r: 6, label: "F♯", lx: 132, ly: 233 },
+  { id: "R3", shape: "pearl", cx: 72.5, cy: 248.5, r: 15, label: "3" },
+  // 右手小指
+  { id: "ebR", shape: "cap", x: 92, y: 262, w: 9, h: 17, label: "低 E♭", lx: 132, ly: 272 },
+  { id: "cR", shape: "cap", x: 103, y: 270, w: 9, h: 17, label: "低 C", lx: 132, ly: 288 }
 ];
+const KEY_BY_ID = Object.fromEntries(KEY_LAYOUT.map((k) => [k.id, k]));
+
+// キー 1 個を描く。labels=true でキー名を横に出す（使い方ページ用）
+function keyShapeSVG(k, on, labels) {
+  const cls = "k " + (on ? "on" : "off");
+  let out = "";
+  if (k.shape === "pearl") {
+    out += `<circle class="${cls} pearl" cx="${k.cx}" cy="${k.cy}" r="${k.r}"/>`;
+    if (labels) out += `<text class="kl kl-hole ${on ? "on" : ""}" x="${k.cx}" y="${k.cy + 3.6}">${k.label}</text>`;
+  } else if (k.shape === "dot") {
+    out += `<circle class="${cls}" cx="${k.cx}" cy="${k.cy}" r="${k.r}"/>`;
+  } else if (k.shape === "oval") {
+    out += `<ellipse class="${cls}" cx="${k.cx}" cy="${k.cy}" rx="${k.rx}" ry="${k.ry}"/>`;
+  } else if (k.shape === "cap" || k.shape === "pad") {
+    const r = Math.min(k.w, k.h) / 2;
+    out += `<rect class="${cls}" x="${k.x}" y="${k.y}" width="${k.w}" height="${k.h}" rx="${r}"/>`;
+  } else if (k.shape === "leaf") {
+    const x = k.cx, y = k.cy, ry = k.ry, rx = k.rx;
+    out += `<path class="${cls}" d="M${x} ${y - ry} C ${x + rx} ${y - ry * 0.45}, ${x + rx} ${y + ry * 0.45}, ${x} ${y + ry} ` +
+      `C ${x - rx} ${y + ry * 0.45}, ${x - rx} ${y - ry * 0.45}, ${x} ${y - ry} Z"/>`;
+  }
+  if (labels && k.shape !== "pearl") {
+    out += `<text class="kn" x="${k.lx}" y="${k.ly}" text-anchor="${k.anchor || "start"}">${k.label}</text>`;
+  }
+  return out;
+}
 
 function fingeringSVG(midi, opts) {
   const o = opts || {};
   const keys = o.keys || fingeringFor(midi) || [];
   const on = new Set(keys);
-  let body = '<rect class="sax-body" x="76" y="16" width="48" height="380" rx="24"/>' +
-    '<rect class="sax-body" x="84" y="396" width="32" height="18" rx="9"/>';
-  let parts = "";
-  for (const k of KEY_LAYOUT) {
-    const cls = "k " + (on.has(k.id) ? "on" : "off");
-    if (k.shape === "pill") {
-      parts += `<rect class="${cls}" x="${k.x}" y="${k.y}" width="${k.w}" height="${k.h}" rx="${k.h / 2}"/>` +
-        `<text class="kl" x="${k.x + k.w / 2}" y="${k.y + k.h / 2 + 3.4}">${k.label}</text>`;
-    } else {
-      const r = k.r;
-      parts += `<circle class="${cls}" cx="${k.cx}" cy="${k.cy}" r="${r}"/>`;
-      if (k.shape === "hole") parts += `<text class="kl kl-hole" x="${k.cx}" y="${k.cy + 4.4}">${k.label}</text>`;
-      else parts += `<text class="kl kl-sm" x="${k.cx}" y="${k.cy + 2.6}">${k.label}</text>`;
-    }
-  }
-  return `<svg class="fing" viewBox="0 0 192 420" role="img" aria-label="運指図">${body}${parts}</svg>`;
+  const labels = !!o.labels;
+  const parts = KEY_LAYOUT.map((k) => keyShapeSVG(k, on.has(k.id), labels)).join("");
+  // 左手と右手のあいだの棹（原画にもある区切りの線）
+  const guide = `<line class="fing-guide" x1="61" y1="151.5" x2="84" y2="151.5"/>`;
+  return `<svg class="fing${labels ? " fing-labeled" : ""}" viewBox="${labels ? "0 0 182 300" : "22 16 116 282"}" ` +
+    `role="img" aria-label="運指図">${guide}${parts}</svg>`;
 }
 
 /* ===================== 3. 設定と保存 ===================== */
@@ -253,8 +278,20 @@ const DEFAULT_SETTINGS = {
   // マイク感度。micGate は音量のしきい値（RMS）、micClarity は「音程が取れている」
   // と見なす自己相関の下限。どちらも小さいほど敏感。
   micGate: 0.006,
-  micClarity: 0.55
+  micClarity: 0.55,
+  palette: "brass"
 };
+
+const PALETTES = [
+  { id: "brass", jp: "真鍮", sw: ["#F6F4EF", "#9A6B12", "#1D1B16"] },
+  { id: "midnight", jp: "藍", sw: ["#F2F4F8", "#2B4C8C", "#161C28"] },
+  { id: "vermilion", jp: "朱", sw: ["#F7F5F2", "#C4432B", "#1A1815"] },
+  { id: "graphite", jp: "黒板", sw: ["#F4F5F4", "#3E7C3A", "#15181A"] }
+];
+function applyPalette() {
+  if (S.palette && S.palette !== "brass") document.documentElement.setAttribute("data-palette", S.palette);
+  else document.documentElement.removeAttribute("data-palette");
+}
 
 // 感度プリセット（1=鈍い 〜 7=最高感度）。
 // 6・7 は離れたマイクや小音量用。雑音でも反応しやすくなる代わりに、
@@ -516,11 +553,34 @@ function h(html) { const t = document.createElement("template"); t.innerHTML = h
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
 let currentScreen = "home";
+let lastQuizScreen = null;       // 使い方から戻る先を覚えておく
+
+// 画面ごとに右上のボタンを出し分ける
+const TOPBAR = {
+  home:     { help: false, home: false, back: false, settings: true },
+  quiz:     { help: true,  home: true,  back: false, settings: false },
+  play:     { help: true,  home: true,  back: false, settings: false },
+  help:     { help: false, home: false, back: true,  settings: false },
+  chart:    { help: false, home: false, back: true,  settings: false },
+  tuner:    { help: false, home: false, back: true,  settings: false },
+  stats:    { help: false, home: false, back: true,  settings: false },
+  settings: { help: false, home: false, back: true,  settings: false }
+};
+function updateTopbar(name) {
+  const c = TOPBAR[name] || TOPBAR.home;
+  $("#tb-help").hidden = !c.help;
+  $("#tb-home").hidden = !c.home;
+  $("#tb-back").hidden = !c.back;
+  $("#tb-settings").hidden = !c.settings;
+}
+
 function nav(name) {
   if (currentScreen === "play" && name !== "play") stopPlayMode();
   if (currentScreen === "tuner" && name !== "tuner") Mic.stop();
   if (currentScreen === "settings" && name !== "settings") { Cal.on = false; Mic.onFrame = null; Mic.stop(); }
+  if (name === "help" && (currentScreen === "quiz" || currentScreen === "play")) lastQuizScreen = currentScreen;
   currentScreen = name;
+  updateTopbar(name);
   $$(".screen").forEach((s) => s.classList.remove("active"));
   const el = document.getElementById("screen-" + name);
   if (el) el.classList.add("active");
@@ -528,6 +588,7 @@ function nav(name) {
   if (name === "settings") renderSettings();
   if (name === "stats") renderStats();
   if (name === "chart") renderChart();
+  if (name === "help") renderHelp();
   if (name === "tuner") renderTuner();
 }
 
@@ -867,8 +928,16 @@ document.addEventListener("keydown", (e) => {
 
 const Play = {
   chord: null, wt: [], midis: [], idx: 0, done: [], hold: 0, n: 0, ok: 0,
-  order: "up", listening: false, lastMsg: ""
+  order: "up", listening: false, sinceTarget: 0, armed: false
 };
+
+// 判定は感度設定より厳しめの下限を使う。
+// サックスの音は倍音がそろっていて自己相関が高く出るので、
+// 雑音（自己相関が低い）と分けられる。ここを感度スライダーに連動させると、
+// 高感度のときに部屋の雑音で勝手に進んでしまう。
+const ACCEPT_CLARITY = 0.62;
+const ACCEPT_FRAMES = 6;         // 約 0.2 秒
+const TARGET_GRACE_MS = 350;     // 次の音に移った直後は判定しない（前の音の余韻よけ）
 
 function startPlayMode(chord) {
   Play.chord = chord || newChord();
@@ -880,6 +949,7 @@ function startPlayMode(chord) {
     Play.midis = idx.map((i) => Play.midis[i]);
   }
   Play.idx = 0; Play.done = Play.wt.map(() => false); Play.hold = 0;
+  Play.sinceTarget = Date.now(); Play.armed = false;
   nav("play");
   renderPlay();
   ensureMic();
@@ -924,17 +994,24 @@ function onPlayFrame(r) {
     if (needle && heard) needle.style.transform = `translateX(${Math.max(-50, Math.min(50, Mic.cents))}px)`;
   }
 
-  if (heard && ((Mic.midi % 12) + 12) % 12 === targetPc && Math.abs(Mic.cents) <= 45) {
+  // 目標の音がいったん「鳴っていない」状態を見てから数え始める。
+  // これをしないと、前の音の余韻や、画面を開いた時点の音でいきなり合格になる。
+  const matches = heard && ((Mic.midi % 12) + 12) % 12 === targetPc && Math.abs(Mic.cents) <= 45;
+  if (!matches) Play.armed = true;
+
+  const fresh = Date.now() - Play.sinceTarget > TARGET_GRACE_MS;
+  if (matches && Play.armed && fresh && r.clarity >= ACCEPT_CLARITY) {
     Play.hold++;
   } else if (Play.hold > 0) {
     Play.hold = Math.max(0, Play.hold - 1);
   }
-  if (Play.hold >= 5) {
+  if (Play.hold >= ACCEPT_FRAMES) {
     Play.hold = 0;
     Play.done[Play.idx] = true;
     Play.n++; Play.ok++;
     if (S.sound) tone(1320, 0, 0.09, 0.06);
     Play.idx++;
+    Play.sinceTarget = Date.now(); Play.armed = false;
     if (Play.idx >= Play.wt.length) {
       recordAnswer(Play.chord.type.id, Play.chord.root, true);
       renderPlay(true);
@@ -950,7 +1027,7 @@ function renderPlay(cleared) {
   if (!Play.chord) { body.innerHTML = ""; return; }
   const chips = Play.wt.map((t, i) => {
     const st = Play.done[i] ? "done" : i === Play.idx ? "now" : "todo";
-    return `<span class="pchip ${st}"><span class="pchip-deg">${esc(degLabel(t.deg))}</span>${pretty(t.name)}</span>`;
+    return `<button class="pchip ${st}" data-i="${i}" type="button" title="この音に戻る"><span class="pchip-deg">${esc(degLabel(t.deg))}</span>${pretty(t.name)}</button>`;
   }).join("");
   const i = Math.min(Play.idx, Play.wt.length - 1);
   const cur = Play.wt[i], curMidi = Play.midis[i];
@@ -996,7 +1073,18 @@ $("#play-body").addEventListener("click", (e) => {
   if (e.target.closest("#play-listen")) { playWrittenMidis([Play.midis[Math.min(Play.idx, Play.midis.length - 1)]], { dur: 0.9 }); return; }
   if (e.target.closest("#play-skip")) {
     Play.idx = Math.min(Play.idx + 1, Play.wt.length);
+    Play.sinceTarget = Date.now(); Play.armed = false; Play.hold = 0;
     if (Play.idx >= Play.wt.length) startPlayMode(newChord()); else renderPlay();
+    return;
+  }
+  // 誤って進んでしまったときのために、音名をタップしてその音に戻れる
+  const chip = e.target.closest(".pchip");
+  if (chip) {
+    const i = Number(chip.dataset.i);
+    Play.idx = i;
+    for (let k = i; k < Play.done.length; k++) Play.done[k] = false;
+    Play.sinceTarget = Date.now(); Play.armed = false; Play.hold = 0;
+    renderPlay();
     return;
   }
   if (e.target.closest("#play-order")) {
@@ -1216,6 +1304,79 @@ $("#stats-wrap").addEventListener("click", (e) => {
   }
 });
 
+
+/* ===================== 使い方 ===================== */
+
+function renderHelp() {
+  const wrap = $("#help-wrap");
+  const sample = fingeringSVG(67, { labels: true });        // 記譜 G の運指を例に
+  wrap.innerHTML = `
+    <div class="help-lead">コードの構成音を覚えて、その場で運指を確認し、実際に吹いて確かめるためのアプリです。</div>
+
+    <h3 class="help-h">吹いて答えるモード</h3>
+    <p class="help-p">表示されたコードの構成音を、<b>下から順に 1 音ずつ吹く</b>モードです。マイクが音程を聞き取り、合っていれば自動で次の音に進みます。</p>
+    <ol class="help-steps">
+      <li><b>コードを見る</b>（例：Dm7）。その下の丸い並びが、これから吹く音の一覧です。</li>
+      <li><b>大きく出ている音を吹く</b>。左に音名と度数、右にその運指図が出ます。</li>
+      <li>合っていれば<b>音名の並びが緑になって次へ進みます</b>。全部吹けたら次のコードへ。</li>
+    </ol>
+
+    <div class="help-legend">
+      <div class="help-legend-title">画面の見方</div>
+      <ul class="help-list">
+        <li><span class="lg-chip"><span class="pchip now"><span class="pchip-deg">R</span>D</span></span>
+          <span><b>色つき</b>＝いま吹く音。<b>緑</b>＝吹けた音。<b>薄いグレー</b>＝まだの音。</span></li>
+        <li><span class="lg-chip"><span class="pt-deg">♭7</span></span>
+          <span>コードの何番目の音か（R＝ルート、3＝3rd、♭7＝7th）。ここを覚えるのが目的です。</span></li>
+        <li><span class="lg-chip"><span class="dim small">記譜 D4 ／ 実音 F3</span></span>
+          <span><b>記譜</b>＝あなたの譜面での音名（＝運指図の音）。<b>実音</b>＝実際に鳴る高さ。マイクは実音を聞いています。</span></li>
+        <li><span class="lg-chip"><span class="play-live hit" style="min-height:0;padding:4px 8px"><span class="pl-note" style="font-size:16px">D</span></span></span>
+          <span>いまマイクが聞き取っている音。<b>緑＝正解の音</b>、赤＝違う音、「—」＝音を拾えていない。</span></li>
+        <li><span class="lg-chip"><span class="pl-cents in">+3¢</span></span>
+          <span>音程のズレ（セント）。±15 以内なら緑。判定は ±45 まで許容します。</span></li>
+        <li><span class="lg-chip"><span class="mic-meter" style="width:52px;margin:0"><span class="mic-meter-fill over" style="width:60%"></span><span class="mic-meter-th" style="left:35%"></span></span></span>
+          <span>入力の音量。<b>赤い縦線</b>がしきい値で、バーがそれを越えて緑になれば拾えています。</span></li>
+      </ul>
+    </div>
+
+    <h3 class="help-h">反応しないとき / 勝手に進むとき</h3>
+    <ul class="help-list">
+      <li><b>バーが動かない</b>：音量が届いていません。マイク感度を上げるか、端末を近づけてください。</li>
+      <li><b>バーは動くが音名が出ない</b>：音程が取れていません。感度を上げるか、少し長めに音を伸ばしてください。</li>
+      <li><b>吹いていないのに進む</b>：感度が高すぎます。1 段階下げてください。</li>
+      <li>音が出ないときは、<b>チューナー画面</b>で確かめると原因が分かります。</li>
+      <li>マイクは <b>https:// か localhost</b> でしか使えません（ブラウザの決まり）。</li>
+    </ul>
+
+    <h3 class="help-h">運指図の読み方</h3>
+    <p class="help-p">色が付いたキーを押さえます。大きい丸が指を置く主要キー（左手 1・2・3／右手 1・2・3）です。</p>
+    <div class="help-fing">${sample}<div class="help-fing-cap">例：記譜 G（左手 1・2・3）</div></div>
+
+    <h3 class="help-h">クイズの種類</h3>
+    <ul class="help-list">
+      <li><b>コード → 構成音</b>：コード名を見て、構成音を 12 音からすべて選ぶ。</li>
+      <li><b>度数クイズ</b>：「B♭7 の ♭7 は？」に答える。アドリブ中に一番使う力です。</li>
+      <li><b>構成音 → コード名</b>：並んだ音からコード名を当てる。</li>
+      <li><b>運指クイズ</b>：運指図 → 音名、音名 → 運指の両方向。</li>
+    </ul>
+    <p class="help-p">答え合わせでは必ず<b>構成音ぜんぶの運指図</b>が出ます。苦手なコードほど出題されやすくなります（成績画面で確認できます）。</p>
+
+    <h3 class="help-h">C譜と移調譜</h3>
+    <ul class="help-list">
+      <li><b>${esc(scoreName())}（自分のパート譜）</b>：書かれたコードをそのまま吹く。</li>
+      <li><b>C譜（実音）</b>：ピアノやギターと同じ実音のコード。自分で移調して吹く練習になります。</li>
+    </ul>
+    <p class="help-p">楽器と譜面は<b>右上の楽器バッジ</b>から、いつでも切り替えられます。</p>
+
+    <button class="btn btn-primary help-back" id="help-back" type="button">戻る</button>`;
+}
+$("#help-wrap").addEventListener("click", (e) => {
+  if (e.target.closest("#help-back")) {
+    if (lastQuizScreen) { const t = lastQuizScreen; lastQuizScreen = null; nav(t); if (t === "play") { renderPlay(); ensureMic(); } }
+    else nav("home");
+  }
+});
+
 /* ===================== 15. 設定 ===================== */
 
 function renderSettings() {
@@ -1269,6 +1430,12 @@ function renderSettings() {
       <button class="mini" id="roots-flat" type="button">♭系だけ（管楽器に多い）</button>
     </div>
 
+    <h3 class="sec-title">配色</h3>
+    <div class="pal-row">
+      ${PALETTES.map((p) => `<button class="pal ${S.palette === p.id ? "on" : ""}" data-pal="${p.id}" type="button">
+        <span class="pal-sw">${p.sw.map((c) => `<i style="background:${c}"></i>`).join("")}</span>${esc(p.jp)}</button>`).join("")}
+    </div>
+
     <h3 class="sec-title">マイク感度</h3>
     ${micPanelHTML()}
     <p class="dim small">大きく吹かないと反応しないときは感度を上げてください。「自動で合わせる」は、周囲の雑音を 1.5 秒測ってその少し上にしきい値を置きます（測定中は吹かないこと）。</p>
@@ -1284,6 +1451,8 @@ function renderSettings() {
 
 $("#settings-wrap").addEventListener("click", (e) => {
   if (handleMicPanelClick(e)) return;
+  const pal = e.target.closest("[data-pal]");
+  if (pal) { S.palette = pal.dataset.pal; save(); applyPalette(); renderSettings(); return; }
   const i = e.target.closest("[data-inst]");
   if (i) { S.instrument = i.dataset.inst; applyPitchChange(); return; }
   const p = e.target.closest("[data-pitch]");
@@ -1373,6 +1542,16 @@ $("#quick-sheet").addEventListener("click", (e) => {
   if (p) { S.chartPitch = p.dataset.pitch; applyPitchChange(); return; }
 });
 $("#inst-badge").addEventListener("click", openQuickSheet);
+$("#tb-home").addEventListener("click", () => nav("home"));
+$("#tb-settings").addEventListener("click", () => nav("settings"));
+$("#tb-help").addEventListener("click", () => nav("help"));
+$("#tb-back").addEventListener("click", () => {
+  // 使い方はクイズの途中から開くので、開いた画面に戻す
+  if (currentScreen === "help" && lastQuizScreen) {
+    const t = lastQuizScreen; lastQuizScreen = null; nav(t);
+    if (t === "play") { renderPlay(); ensureMic(); }
+  } else nav("home");
+});
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeQuickSheet(); });
 
 /* ===================== 16. 起動 ===================== */
@@ -1400,6 +1579,7 @@ document.addEventListener("click", (e) => {
   }
 });
 
+applyPalette();
 updateBadge();
 nav("home");
 
@@ -1419,5 +1599,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catc
 
 // デバッグ・テスト用に主要関数を公開する
 window.__TYPES = CHORD_TYPES;
-window.SaxChord = { __svg: fingeringSVG, buildChord, fingeringFor, transposeName, spell, detectPitch, voiceChord, settings: () => S, mic: () => Mic, S: () => S, Quiz, Play };
+window.__PALETTES = PALETTES;
+window.SaxChord = { __svg: fingeringSVG, buildChord, fingeringFor, transposeName, spell, detectPitch, voiceChord, settings: () => S, mic: () => Mic,
+  acceptRules: () => ({ clarity: ACCEPT_CLARITY, frames: ACCEPT_FRAMES, grace: TARGET_GRACE_MS }), S: () => S, Quiz, Play };
 })();

@@ -191,74 +191,62 @@ function altFingeringFor(midi) {
    実物のキーの形と位置に寄せる（大きな丸＝真珠の付いた主要キー、
    細長い葉＝オクターブキー、小判形＝パームキー、板＝サイド／小指のキー）。
    どこがどのキーか、形と位置で分かるようにするのが狙い。 */
-const KEY_LAYOUT = [
-  // 座標は saxfinger.png（138x326）から実測した位置をそのまま使う。
-  // 絵に無いキー（小指のテーブル・右手小指・F♯・ハイF♯・サイドの内訳）は
-  // 同じ描き方で足している。絵にあるものは位置も大きさも原画どおり。
-  { id: "palmF", shape: "oval", cx: 101, cy: 43, rx: 4.5, ry: 10.5, label: "パーム F", lx: 132, ly: 40 },
-  { id: "palmEb", shape: "oval", cx: 110.5, cy: 55, rx: 4.5, ry: 10.5, label: "パーム E♭", lx: 132, ly: 56 },
-  { id: "palmD", shape: "oval", cx: 101, cy: 68, rx: 4.5, ry: 10.5, label: "パーム D", lx: 132, ly: 72 },
-  { id: "oct", shape: "leaf", cx: 36, cy: 78.5, ry: 15, rx: 5.5, label: "オクターブ", lx: 26, ly: 81, anchor: "end" },
-  { id: "frontF", shape: "dot", cx: 72.5, cy: 30.5, r: 6, label: "フロント F", lx: 40, ly: 33, anchor: "end" },
-  { id: "L1", shape: "pearl", cx: 72.5, cy: 54.5, r: 15, label: "1" },
-  { id: "bis", shape: "dot", cx: 87.5, cy: 73, r: 6, label: "バイス B♭", lx: 132, ly: 95 },
-  { id: "L2", shape: "pearl", cx: 72.5, cy: 91.5, r: 15, label: "2" },
-  { id: "L3", shape: "pearl", cx: 72.5, cy: 128.5, r: 15, label: "3" },
-  // 左手小指のテーブル（G♯ が上、下に低 C♯・B・B♭ の山）
-  { id: "gs", shape: "cap", x: 39, y: 128, w: 9, h: 17, label: "G♯", lx: 34, ly: 138, anchor: "end" },
-  { id: "csL", shape: "cap", x: 50, y: 136, w: 9, h: 17, label: "低 C♯", lx: 34, ly: 152, anchor: "end" },
-  { id: "bL", shape: "cap", x: 39, y: 150, w: 9, h: 17, label: "低 B", lx: 34, ly: 166, anchor: "end" },
-  { id: "bbL", shape: "cap", x: 50, y: 158, w: 9, h: 17, label: "低 B♭", lx: 34, ly: 180, anchor: "end" },
-  // 右のサイドキー（原画では 1 つの塊なので、同じ枠の中を 4 段に割る）
-  { id: "highFs", shape: "pad", x: 99, y: 122, w: 26, h: 9, label: "ハイ F♯", lx: 132, ly: 129 },
-  { id: "sideE", shape: "pad", x: 99, y: 134, w: 26, h: 9, label: "側面 E", lx: 132, ly: 141 },
-  { id: "sideC", shape: "pad", x: 99, y: 146, w: 26, h: 9, label: "側面 C", lx: 132, ly: 153 },
-  { id: "sideBb", shape: "pad", x: 99, y: 158, w: 26, h: 9, label: "側面 B♭", lx: 132, ly: 165 },
-  { id: "R1", shape: "pearl", cx: 72.5, cy: 174.5, r: 15, label: "1" },
-  { id: "R2", shape: "pearl", cx: 72.5, cy: 211.5, r: 15, label: "2" },
-  { id: "fs", shape: "dot", cx: 92, cy: 230, r: 6, label: "F♯", lx: 132, ly: 233 },
-  { id: "R3", shape: "pearl", cx: 72.5, cy: 248.5, r: 15, label: "3" },
-  // 右手小指
-  { id: "ebR", shape: "cap", x: 92, y: 262, w: 9, h: 17, label: "低 E♭", lx: 132, ly: 272 },
-  { id: "cR", shape: "cap", x: 103, y: 270, w: 9, h: 17, label: "低 C", lx: 132, ly: 288 }
-];
-const KEY_BY_ID = Object.fromEntries(KEY_LAYOUT.map((k) => [k.id, k]));
+/* 運指図は saxfinger.png（138x326）そのものを使う。
+   背景を抜いたマスク（saxfinger-mask.png）をテーマ色で塗って輪郭を出し、
+   その下に、押さえるキーだけ色を敷く。座標は原画から実測した位置。 */
+const IMG_W = 138, IMG_H = 326;
 
-// キー 1 個を描く。labels=true でキー名を横に出す（使い方ページ用）
-function keyShapeSVG(k, on, labels) {
-  const cls = "k " + (on ? "on" : "off");
-  let out = "";
-  if (k.shape === "pearl") {
-    out += `<circle class="${cls} pearl" cx="${k.cx}" cy="${k.cy}" r="${k.r}"/>`;
-    if (labels) out += `<text class="kl kl-hole ${on ? "on" : ""}" x="${k.cx}" y="${k.cy + 3.6}">${k.label}</text>`;
-  } else if (k.shape === "dot") {
-    out += `<circle class="${cls}" cx="${k.cx}" cy="${k.cy}" r="${k.r}"/>`;
-  } else if (k.shape === "oval") {
-    out += `<ellipse class="${cls}" cx="${k.cx}" cy="${k.cy}" rx="${k.rx}" ry="${k.ry}"/>`;
-  } else if (k.shape === "cap" || k.shape === "pad") {
-    const r = Math.min(k.w, k.h) / 2;
-    out += `<rect class="${cls}" x="${k.x}" y="${k.y}" width="${k.w}" height="${k.h}" rx="${r}"/>`;
-  } else if (k.shape === "leaf") {
-    const x = k.cx, y = k.cy, ry = k.ry, rx = k.rx;
-    out += `<path class="${cls}" d="M${x} ${y - ry} C ${x + rx} ${y - ry * 0.45}, ${x + rx} ${y + ry * 0.45}, ${x} ${y + ry} ` +
-      `C ${x - rx} ${y + ry * 0.45}, ${x - rx} ${y - ry * 0.45}, ${x} ${y - ry} Z"/>`;
-  }
-  if (labels && k.shape !== "pearl") {
-    out += `<text class="kn" x="${k.lx}" y="${k.ly}" text-anchor="${k.anchor || "start"}">${k.label}</text>`;
-  }
-  return out;
-}
+// 原画にあるキーと、その位置
+const IMG_KEYS = {
+  frontF: { type: "circle", cx: 72.5, cy: 30.5, r: 5.2 },
+  L1: { type: "circle", cx: 72.5, cy: 54.5, r: 14 },
+  L2: { type: "circle", cx: 72.5, cy: 91.5, r: 14 },
+  L3: { type: "circle", cx: 72.5, cy: 128.5, r: 14 },
+  R1: { type: "circle", cx: 72.5, cy: 174.5, r: 14 },
+  R2: { type: "circle", cx: 72.5, cy: 211.5, r: 14 },
+  R3: { type: "circle", cx: 72.5, cy: 248.5, r: 14 },
+  bis: { type: "circle", cx: 87.5, cy: 73, r: 5.2 },
+  oct: { type: "ellipse", cx: 36, cy: 78.5, rx: 4.6, ry: 14.2 },
+  palmF: { type: "ellipse", cx: 101, cy: 43, rx: 3.7, ry: 9.6 },
+  palmEb: { type: "ellipse", cx: 110.5, cy: 55, rx: 4.2, ry: 9.6 },
+  palmD: { type: "ellipse", cx: 101, cy: 66, rx: 3.7, ry: 9.6 },
+  // 原画ではサイドキーが 1 つの塊なので、どれを押しても同じ場所が光る
+  sideE: { type: "rect", x: 98.5, y: 126.5, w: 26, h: 40, r: 4 },
+  sideC: { type: "rect", x: 98.5, y: 126.5, w: 26, h: 40, r: 4 },
+  sideBb: { type: "rect", x: 98.5, y: 126.5, w: 26, h: 40, r: 4 },
+  highFs: { type: "rect", x: 98.5, y: 126.5, w: 26, h: 40, r: 4 }
+};
+// 原画に描かれていないキー。図の下に文字で補う
+const KEY_NAMES_JP = {
+  gs: "G♯（左小指）", csL: "低C♯（左小指）", bL: "低B（左小指）", bbL: "低B♭（左小指）",
+  ebR: "低E♭（右小指）", cR: "低C（右小指）", fs: "F♯キー（右薬指）",
+  sideE: "側面E", sideC: "側面C", sideBb: "側面B♭", highFs: "ハイF♯"
+};
+const IMG_MISSING = ["gs", "csL", "bL", "bbL", "ebR", "cR", "fs"];
 
 function fingeringSVG(midi, opts) {
   const o = opts || {};
   const keys = o.keys || fingeringFor(midi) || [];
-  const on = new Set(keys);
-  const labels = !!o.labels;
-  const parts = KEY_LAYOUT.map((k) => keyShapeSVG(k, on.has(k.id), labels)).join("");
-  // 左手と右手のあいだの棹（原画にもある区切りの線）
-  const guide = `<line class="fing-guide" x1="61" y1="151.5" x2="84" y2="151.5"/>`;
-  return `<svg class="fing${labels ? " fing-labeled" : ""}" viewBox="${labels ? "0 0 182 300" : "22 16 116 282"}" ` +
-    `role="img" aria-label="運指図">${guide}${parts}</svg>`;
+  let hi = "";
+  const drawn = new Set();
+  for (const id of keys) {
+    const k = IMG_KEYS[id];
+    if (!k) continue;
+    const sig = JSON.stringify(k);
+    if (drawn.has(sig)) continue;             // サイドキーの塊を二重に塗らない
+    drawn.add(sig);
+    if (k.type === "circle") hi += `<circle class="fk-on" cx="${k.cx}" cy="${k.cy}" r="${k.r}"/>`;
+    else if (k.type === "ellipse") hi += `<ellipse class="fk-on" cx="${k.cx}" cy="${k.cy}" rx="${k.rx}" ry="${k.ry}"/>`;
+    else hi += `<rect class="fk-on" x="${k.x}" y="${k.y}" width="${k.w}" height="${k.h}" rx="${k.r}"/>`;
+  }
+  // 原画に無いキーと、塊で表せないサイドキーの内訳を文字で出す
+  const notes = keys.filter((id) => IMG_MISSING.includes(id) || (KEY_NAMES_JP[id] && IMG_KEYS[id]))
+    .map((id) => KEY_NAMES_JP[id]).filter(Boolean);
+  const note = notes.length ? `<div class="fk-note">＋ ${notes.map(esc).join("・")}</div>` : "";
+  return `<div class="fk">
+      <svg class="fk-hi" viewBox="0 0 ${IMG_W} ${IMG_H}" aria-hidden="true">${hi}</svg>
+      <div class="fk-base" role="img" aria-label="運指図"></div>
+    </div>${note}`;
 }
 
 /* ===================== 3. 設定と保存 ===================== */
@@ -415,30 +403,99 @@ function audioCtx() {
   if (AC.state === "suspended") AC.resume();
   return AC;
 }
-// リード楽器っぽい音で 1 音鳴らす（実音で鳴らす）
-function tone(freq, at, dur, gain) {
+/* サックスの音を作る。
+   ・倍音の並びを実測値に近づけた波形（2〜4 倍音が強く、以降なだらかに減る）
+   ・800Hz 付近と 1.8kHz 付近のフォルマント（あの鼻にかかった芯）
+   ・吹き始めに倍音が開く（ローパスを立ち上げる）
+   ・少し遅れてかかるビブラート
+   ・アタックの息の音 */
+let SAX_WAVE = null, SAX_WAVE_CTX = null;
+function saxWave(ac) {
+  if (SAX_WAVE && SAX_WAVE_CTX === ac) return SAX_WAVE;
+  const amps = [0, 1, 0.92, 0.78, 0.52, 0.44, 0.31, 0.24, 0.18, 0.13, 0.1, 0.076, 0.056, 0.042, 0.031, 0.023, 0.017];
+  const real = new Float32Array(amps.length), imag = new Float32Array(amps.length);
+  for (let i = 1; i < amps.length; i++) imag[i] = amps[i];
+  SAX_WAVE = ac.createPeriodicWave(real, imag);
+  SAX_WAVE_CTX = ac;
+  return SAX_WAVE;
+}
+
+function saxNote(freq, at, dur, gain, ctx) {
+  const ac = ctx || audioCtx();
+  const t0 = ac.currentTime + at, t1 = t0 + dur;
+  const out = ac.destination;
+
+  const osc = ac.createOscillator();
+  osc.setPeriodicWave(saxWave(ac));
+  osc.frequency.setValueAtTime(freq, t0);
+
+  // ビブラート：吹き始めからじわっとかかる
+  const lfo = ac.createOscillator();
+  lfo.type = "sine";
+  lfo.frequency.setValueAtTime(5.2, t0);
+  const lfoAmt = ac.createGain();
+  lfoAmt.gain.setValueAtTime(0, t0);
+  lfoAmt.gain.linearRampToValueAtTime(freq * 0.007, t0 + Math.min(0.4, dur * 0.7));
+  lfo.connect(lfoAmt); lfoAmt.connect(osc.frequency);
+
+  // 息が入ると倍音が開く
+  const lp = ac.createBiquadFilter();
+  lp.type = "lowpass"; lp.Q.value = 0.7;
+  lp.frequency.setValueAtTime(Math.max(300, Math.min(1400, freq * 2.2)), t0);
+  lp.frequency.linearRampToValueAtTime(Math.min(7500, freq * 7.5), t0 + 0.08);
+  lp.frequency.setTargetAtTime(Math.min(4500, freq * 4.5), t0 + 0.2, 0.25);
+
+  // フォルマント
+  const f1 = ac.createBiquadFilter();
+  f1.type = "peaking"; f1.frequency.value = 860; f1.Q.value = 1.1; f1.gain.value = 7.5;
+  const f2 = ac.createBiquadFilter();
+  f2.type = "peaking"; f2.frequency.value = 1850; f2.Q.value = 1.5; f2.gain.value = 4.5;
+  const f3 = ac.createBiquadFilter();
+  f3.type = "highshelf"; f3.frequency.value = 5200; f3.gain.value = -8;   // 耳に痛い上を落とす
+
+  const amp = ac.createGain();
+  amp.gain.setValueAtTime(0.0001, t0);
+  amp.gain.exponentialRampToValueAtTime(gain, t0 + 0.04);
+  amp.gain.exponentialRampToValueAtTime(gain * 0.8, t0 + 0.16);
+  amp.gain.setTargetAtTime(0.0001, Math.max(t0 + 0.18, t1 - 0.02), 0.06);
+
+  osc.connect(lp); lp.connect(f1); f1.connect(f2); f2.connect(f3); f3.connect(amp); amp.connect(out);
+  osc.start(t0); osc.stop(t1 + 0.5);
+  lfo.start(t0); lfo.stop(t1 + 0.5);
+
+  // アタックの息の音
+  const n = Math.max(1, Math.floor(ac.sampleRate * 0.07));
+  const buf = ac.createBuffer(1, n, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2);
+  const noise = ac.createBufferSource(); noise.buffer = buf;
+  const nbp = ac.createBiquadFilter();
+  nbp.type = "bandpass"; nbp.frequency.value = Math.min(3600, Math.max(700, freq * 4)); nbp.Q.value = 0.7;
+  const ng = ac.createGain(); ng.gain.value = gain * 0.35;
+  noise.connect(nbp); nbp.connect(ng); ng.connect(out);
+  noise.start(t0);
+}
+
+// 正解などの合図に使う短い電子音
+function blip(freq, at, dur, gain) {
   const ac = audioCtx();
   const t0 = ac.currentTime + at;
-  const osc = ac.createOscillator();
-  const osc2 = ac.createOscillator();
-  const g = ac.createGain();
-  const lp = ac.createBiquadFilter();
-  osc.type = "sawtooth"; osc2.type = "square";
-  osc.frequency.value = freq; osc2.frequency.value = freq * 2.005;
-  lp.type = "lowpass"; lp.frequency.value = Math.min(4200, freq * 6); lp.Q.value = 0.7;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = "sine"; o.frequency.value = freq;
   g.gain.setValueAtTime(0, t0);
-  g.gain.linearRampToValueAtTime(gain, t0 + 0.03);
-  g.gain.setTargetAtTime(0.0001, t0 + dur * 0.7, 0.12);
-  osc.connect(lp); osc2.connect(lp); lp.connect(g); g.connect(ac.destination);
-  osc.start(t0); osc2.start(t0); osc.stop(t0 + dur + 0.4); osc2.stop(t0 + dur + 0.4);
+  g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
+  g.gain.setTargetAtTime(0.0001, t0 + dur * 0.5, 0.05);
+  o.connect(g); g.connect(ac.destination);
+  o.start(t0); o.stop(t0 + dur + 0.3);
 }
+
 function playWrittenMidis(midis, opts) {
   if (!S.sound) return;
   const o = opts || {};
   const gap = o.gap == null ? 0.42 : o.gap;
   const dur = o.dur == null ? 0.5 : o.dur;
-  midis.forEach((m, i) => tone(midiToFreq(concertMidi(m)), i * gap, dur, 0.16));
-  if (o.chord) midis.forEach((m) => tone(midiToFreq(concertMidi(m)), midis.length * gap + 0.15, 1.1, 0.11));
+  midis.forEach((m, i) => saxNote(midiToFreq(concertMidi(m)), i * gap, dur, 0.17));
+  if (o.chord) midis.forEach((m) => saxNote(midiToFreq(concertMidi(m)), midis.length * gap + 0.15, 1.2, 0.1));
 }
 
 /* ===================== 6. マイクでの音程検出 ===================== */
@@ -885,7 +942,7 @@ $("#quiz-body").addEventListener("click", (e) => {
       if (Quiz.selected.has(pc)) Quiz.selected.delete(pc); else Quiz.selected.add(pc);
       pcBtn.classList.toggle("sel");
       updatePcCount();
-      if (S.sound) tone(midiToFreq(concertMidi(writtenMidiFor(pc, 62))), 0, 0.28, 0.12);
+      if (S.sound) saxNote(midiToFreq(concertMidi(writtenMidiFor(pc, 62))), 0, 0.32, 0.15);
       if (Quiz.selected.size === q.wt.length) checkTones();
     } else {
       Quiz.selected = new Set([pc]);
@@ -1009,7 +1066,7 @@ function onPlayFrame(r) {
     Play.hold = 0;
     Play.done[Play.idx] = true;
     Play.n++; Play.ok++;
-    if (S.sound) tone(1320, 0, 0.09, 0.06);
+    if (S.sound) blip(1320, 0, 0.1, 0.07);
     Play.idx++;
     Play.sinceTarget = Date.now(); Play.armed = false;
     if (Play.idx >= Play.wt.length) {
@@ -1309,7 +1366,7 @@ $("#stats-wrap").addEventListener("click", (e) => {
 
 function renderHelp() {
   const wrap = $("#help-wrap");
-  const sample = fingeringSVG(67, { labels: true });        // 記譜 G の運指を例に
+  const sample = fingeringSVG(67);                          // 記譜 G の運指を例に
   wrap.innerHTML = `
     <div class="help-lead">コードの構成音を覚えて、その場で運指を確認し、実際に吹いて確かめるためのアプリです。</div>
 
@@ -1349,8 +1406,15 @@ function renderHelp() {
     </ul>
 
     <h3 class="help-h">運指図の読み方</h3>
-    <p class="help-p">色が付いたキーを押さえます。大きい丸が指を置く主要キー（左手 1・2・3／右手 1・2・3）です。</p>
+    <p class="help-p">色が付いたキーを押さえます。縦に並ぶ大きい丸が、指を置く主要キーです。上の 3 つが左手 1・2・3、下の 3 つが右手 1・2・3。</p>
     <div class="help-fing">${sample}<div class="help-fing-cap">例：記譜 G（左手 1・2・3）</div></div>
+    <ul class="help-list">
+      <li><b>左の細長いキー</b>：オクターブキー（左手親指）</li>
+      <li><b>右上の縦長 3 つ</b>：パームキー（上から F・E♭・D。左の手のひらで押す）</li>
+      <li><b>右の四角い塊</b>：サイドキー（側面 E・C・B♭、ハイ F♯）。この図では 1 つにまとまっているので、どれを押すかは図の下の文字で示します</li>
+      <li><b>いちばん上の小さい丸</b>：フロント F、<b>左手 1 と 2 のあいだの小さい丸</b>：バイス B♭</li>
+      <li>小指のキー（G♯・低 C♯・低 B・低 B♭・低 E♭・低 C）と F♯ キーはこの図に描かれていないため、<b>図の下に文字で出します</b></li>
+    </ul>
 
     <h3 class="help-h">クイズの種類</h3>
     <ul class="help-list">
@@ -1600,6 +1664,6 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catc
 // デバッグ・テスト用に主要関数を公開する
 window.__TYPES = CHORD_TYPES;
 window.__PALETTES = PALETTES;
-window.SaxChord = { __svg: fingeringSVG, buildChord, fingeringFor, transposeName, spell, detectPitch, voiceChord, settings: () => S, mic: () => Mic,
+window.SaxChord = { __svg: fingeringSVG, buildChord, fingeringFor, transposeName, spell, detectPitch, voiceChord, saxNote, settings: () => S, mic: () => Mic,
   acceptRules: () => ({ clarity: ACCEPT_CLARITY, frames: ACCEPT_FRAMES, grace: TARGET_GRACE_MS }), S: () => S, Quiz, Play };
 })();

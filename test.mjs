@@ -120,7 +120,7 @@ let sel = await page.evaluate(() => {
 for (const pc of sel.pcs) await page.click(`.pc-btn[data-pc="${pc}"]`);
 await page.waitForSelector('.answer-panel.ok', { timeout: 3000 }).catch(()=>{});
 ck('コード→構成音: 正解で答えパネル', await page.locator('.answer-panel.ok').count() === 1);
-ck('答えパネルに運指図がある', await page.locator('.answer-panel .fcard .fing').count() === sel.pcs.length);
+ck('答えパネルに運指図がある', await page.locator('.answer-panel .fcard .fk').count() === sel.pcs.length);
 await page.screenshot({ path: path.join(SHOTS, 'shot-tones.png'), fullPage: true });
 
 // 不正解のパス
@@ -205,7 +205,7 @@ await p2.evaluate(() => localStorage.removeItem('saxchord.v1'));
 await p2.reload({ waitUntil: 'domcontentloaded' }); await p2.waitForTimeout(300);
 await p2.click('[data-mode="play"]');
 await p2.waitForTimeout(800);
-ck('吹いて答える: ターゲット表示', await p2.locator('.play-target .fing').count() === 1);
+ck('吹いて答える: ターゲット表示', await p2.locator('.play-target .fk').count() === 1);
 ck('吹いて答える: 運指チップ', await p2.locator('.pchip').count() >= 3);
 await p2.screenshot({ path: path.join(SHOTS, 'shot-play.png'), fullPage: true });
 
@@ -409,8 +409,9 @@ ck('クイズ画面に設定ボタンは出さない', !(await page.locator('#tb
 await page.click('#tb-help');
 await page.waitForSelector('#screen-help.active');
 ck('使い方ページが開く', (await page.locator('.help-h').count()) >= 4);
-ck('使い方に運指図の凡例がある', await page.locator('.help-fing .fing-labeled').count() === 1);
-ck('運指図のキー名が出ている', (await page.locator('.help-fing .kn').count()) >= 12);
+ck('使い方に運指図の例がある', await page.locator('.help-fing .fk').count() === 1);
+ck('運指図のキーの説明がある', /パームキー/.test(await page.locator('#help-wrap').textContent())
+  && /オクターブキー/.test(await page.locator('#help-wrap').textContent()));
 ck('使い方では戻るボタンだけ', await page.locator('#tb-back').isVisible()
   && !(await page.locator('#tb-settings').isVisible()) && !(await page.locator('#tb-help').isVisible())
   && !(await page.locator('#tb-home').isVisible()));
@@ -427,21 +428,23 @@ ck('戻るでホームに戻る', await page.locator('#screen-home.active').coun
 ck('ホームの見出し説明を削除', await page.locator('.hero').count() === 0);
 ck('ブランドマークを削除', await page.locator('.brand-mark').count() === 0);
 
-// 運指図：キーの形が描き分けられている
-const shapes = await page.evaluate(() => {
-  document.body.insertAdjacentHTML('beforeend', `<div id="tmp">${window.SaxChord.__svg(70, { labels: true })}</div>`);
-  const svg = document.querySelector('#tmp svg');
-  const r = { pearls: svg.querySelectorAll('circle.pearl').length, pads: svg.querySelectorAll('rect.k').length,
-    ovals: svg.querySelectorAll('ellipse.k').length, leaf: svg.querySelectorAll('path.k').length,
-    on: [...svg.querySelectorAll('.k.on')].length };
-  document.querySelector('#tmp').remove();
-  return r;
+// 運指図：元の画像をそのまま使い、押さえるキーだけ塗る
+const fig = await page.evaluate(() => {
+  const mk = (m) => {
+    const d = document.createElement('div');
+    d.innerHTML = window.SaxChord.__svg(m);
+    return { hi: d.querySelectorAll('.fk-hi .fk-on').length,
+             base: d.querySelectorAll('.fk-base').length,
+             note: (d.querySelector('.fk-note') || {}).textContent || '' };
+  };
+  return { open: mk(73), d: mk(62), bis: mk(70), lowBb: mk(58), hiE: mk(88), sideC: mk(72) };
 });
-ck('主要キーは大きな丸6つ', shapes.pearls === 6, JSON.stringify(shapes));
-ck('パームキーは小判形', shapes.ovals === 3, JSON.stringify(shapes));
-ck('サイド／小指キーは板状', shapes.pads === 10, JSON.stringify(shapes));
-ck('オクターブキーは葉の形', shapes.leaf === 1, JSON.stringify(shapes));
-ck('B♭(bis)は2キーだけ点灯', shapes.on === 2, JSON.stringify(shapes));
+ck('運指図は元画像を土台にする', fig.d.base === 1, JSON.stringify(fig.d));
+ck('C♯（オールオープン）は塗りなし', fig.open.hi === 0 && fig.open.note === '', JSON.stringify(fig.open));
+ck('D は主要6キーを塗る', fig.d.hi === 6, JSON.stringify(fig.d));
+ck('B♭(bis) は2キー', fig.bis.hi === 2, JSON.stringify(fig.bis));
+ck('低B♭は絵に無い小指キーを文字で補う', fig.lowBb.hi === 6 && /低B♭/.test(fig.lowBb.note), JSON.stringify(fig.lowBb));
+ck('ハイEはオクターブ＋パーム2つ＋サイドの塊', fig.hiE.hi === 4 && /側面E/.test(fig.hiE.note), JSON.stringify(fig.hiE));
 
 // --- 9. 配色テーマ ---
 await page.click('#tb-settings');
@@ -465,6 +468,44 @@ const guard = await page.evaluate(() => {
 ck('判定は感度設定より厳しい下限を使う', guard.acceptClarity >= 0.6, JSON.stringify(guard));
 ck('判定には連続フレームが必要', guard.frames >= 6, JSON.stringify(guard));
 ck('音が変わった直後は判定しない猶予がある', guard.grace >= 300, JSON.stringify(guard));
+
+
+// --- 11. 鳴らす音（オフラインで実際にレンダリングして中身を確かめる） ---
+const sound = await page.evaluate(async () => {
+  const sr = 44100, len = sr * 1.2;
+  const oc = new OfflineAudioContext(1, len, sr);
+  window.SaxChord.saxNote(440, 0, 0.9, 0.2, oc);
+  const buf = await oc.startRendering();
+  const d = buf.getChannelData(0);
+  // 立ち上がり・持続・減衰
+  const rms = (a, b) => { let s = 0; for (let i = a; i < b; i++) s += d[i] * d[i]; return Math.sqrt(s / (b - a)); };
+  // 倍音の強さ（1〜6 倍音）を素朴な相関で測る
+  const seg = 8192, off = Math.floor(sr * 0.35);
+  const mag = (f) => {
+    let re = 0, im = 0;
+    for (let i = 0; i < seg; i++) {
+      const t = (off + i) / sr, w = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / seg);
+      re += d[off + i] * w * Math.cos(2 * Math.PI * f * t);
+      im += d[off + i] * w * Math.sin(2 * Math.PI * f * t);
+    }
+    return Math.sqrt(re * re + im * im) / seg;
+  };
+  const h = [1, 2, 3, 4, 5, 6].map((n) => mag(440 * n));
+  let peak = 0;
+  for (let i = 0; i < len; i++) peak = Math.max(peak, Math.abs(d[i]));
+  return {
+    attack: rms(0, 400), body: rms(Math.floor(sr * 0.3), Math.floor(sr * 0.5)),
+    tail: rms(Math.floor(sr * 1.05), Math.floor(sr * 1.15)),
+    peak, h, pitch: window.SaxChord.detectPitch(d.slice(off, off + 4096), sr, { gate: 0.001 }).freq
+  };
+});
+ck('音が出ている', sound.body > 0.02, JSON.stringify({ body: sound.body }));
+ck('音割れしていない', sound.peak < 1.0, sound.peak);
+ck('立ち上がりがある（いきなり最大にならない）', sound.attack < sound.body, JSON.stringify({a: sound.attack, b: sound.body}));
+ck('音が終わる', sound.tail < sound.body * 0.2, JSON.stringify({t: sound.tail, b: sound.body}));
+ck('鳴らした音程が正しい', Math.abs(sound.pitch - 440) < 6, sound.pitch);
+ck('倍音が並んでいる（サイン波ではない）', sound.h[1] > sound.h[0] * 0.25 && sound.h[2] > sound.h[0] * 0.15, JSON.stringify(sound.h.map(x=>+x.toFixed(4))));
+ck('高い倍音ほど弱い', sound.h[5] < sound.h[1], JSON.stringify(sound.h.map(x=>+x.toFixed(4))));
 
 ck('JSエラーなし', errs.length===0 && errs2.length===0, JSON.stringify(errs.concat(errs2)));
 

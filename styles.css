@@ -149,7 +149,7 @@ button{font-family:inherit; color:inherit;}
 .q-oct{font-size:20px; color:var(--ink-faint); margin-left:2px;}
 .q-sub{font-size:12.5px; color:var(--ink-faint);}
 .q-fing{display:flex; justify-content:center; padding:6px 0 2px;}
-.q-fing .fing{height:300px;}
+.q-fing .fk{height:300px;}
 .badge{font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--line);}
 .badge-written{background:var(--accent-soft); color:var(--accent-ink); border-color:transparent;}
 .badge-concert{background:var(--ok-soft); color:var(--ok); border-color:transparent;}
@@ -181,7 +181,7 @@ button{font-family:inherit; color:inherit;}
 .choice.wrong{background:var(--ng-soft); border-color:var(--ng); color:var(--ng);}
 .fing-choice{display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
 .fchoice{padding:6px 2px; border-radius:14px; background:var(--surface); border:1px solid var(--line); cursor:pointer;}
-.fchoice .fing{height:215px;}
+.fchoice .fk{height:215px;}
 .fchoice.right{background:var(--ok-soft); border-color:var(--ok);}
 .fchoice.wrong{background:var(--ng-soft); border-color:var(--ng);}
 
@@ -221,16 +221,15 @@ button{font-family:inherit; color:inherit;}
 .fcard-foot .dim{color:var(--ink-faint);}
 .fcard-alt{font-size:10px; color:var(--ink-faint); border-top:1px dashed var(--line); margin-top:5px; padding-top:4px;}
 
-/* ---------- 運指図 ---------- */
-.fing{width:100%; height:250px; display:block; overflow:visible;}
-.fing .k{stroke:var(--ink-soft); stroke-width:1.5; fill:none;}
-.fing .k.on{fill:var(--accent); stroke:var(--accent);}
-.fing .fing-guide{stroke:var(--ink-faint); stroke-width:1.5;}
-.fing .kl{font-family:"Zen Kaku Gothic New", sans-serif; fill:var(--ink-faint); text-anchor:middle; pointer-events:none;}
-.fing .kl-hole{font-size:11px; font-weight:700;}
-.fing .kl-hole.on{fill:#fff;}
-.fing .kn{font-family:"Zen Kaku Gothic New", sans-serif; font-size:7.5px; fill:var(--ink-faint);}
-.fing-labeled{height:420px;}
+/* ---------- 運指図（原画をマスクとして使い、色はテーマに合わせる） ---------- */
+.fk{position:relative; aspect-ratio:138/326; height:230px; margin:0 auto; max-width:100%;}
+.fk-base{position:absolute; inset:0;
+  -webkit-mask:url(saxfinger-mask.png) center/100% 100% no-repeat;
+  mask:url(saxfinger-mask.png) center/100% 100% no-repeat;
+  background:var(--ink-soft);}
+.fk-hi{position:absolute; inset:0; width:100%; height:100%; display:block;}
+.fk-hi .fk-on{fill:var(--accent); opacity:.9;}
+.fk-note{font-size:10px; color:var(--accent); text-align:center; margin-top:4px; line-height:1.4;}
 
 /* ---------- 吹いて答える ---------- */
 .pchips{display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:10px;}
@@ -247,7 +246,7 @@ button{font-family:inherit; color:inherit;}
 .pt-sub{font-size:11.5px; color:var(--ink-soft);}
 .pt-ger{font-size:11.5px; color:var(--ink-faint);}
 .pt-right{flex:0 0 140px;}
-.pt-right .fing{height:270px;}
+.pt-right .fk{height:260px;}
 .play-live{display:flex; align-items:baseline; gap:10px; justify-content:center; margin-top:12px; padding:10px 14px;
   border-radius:14px; border:1px solid var(--line); background:var(--surface-2); min-height:56px;}
 .play-live.hit{background:var(--ok-soft); border-color:var(--ok);}
@@ -307,7 +306,7 @@ button{font-family:inherit; color:inherit;}
 .chart-lead{font-size:12.5px; color:var(--ink-soft); background:var(--surface-2); border-radius:12px; padding:10px 12px;}
 .chart-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
 @media(min-width:520px){ .chart-grid{grid-template-columns:repeat(5,1fr);} }
-.chart-cell .fing{height:190px;}
+.chart-cell .fk{height:170px;}
 .chart-cell{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:8px; text-align:center; cursor:pointer;}
 .chart-cell:active{transform:scale(.98);}
 .chart-name{font-family:"Bodoni Moda",serif; font-size:22px; font-weight:700;}

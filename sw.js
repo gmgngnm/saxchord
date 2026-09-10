@@ -1,5 +1,5 @@
-const CACHE = "saxchord-v1";
-const SHELL = ["./index.html", "./styles.css", "./app.js", "./manifest.json", "./icon.svg"];
+const CACHE = "saxchord-v2";
+const SHELL = ["./index.html", "./styles.css", "./app.js", "./manifest.json", "./icon.svg", "./saxfinger-mask.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

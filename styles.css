@@ -256,6 +256,11 @@ button{font-family:inherit; color:inherit;}
 .pl-cents{font-size:13px; color:var(--ink-soft);}
 .pl-cents.in{color:var(--ok); font-weight:700;}
 .pl-hint{font-size:12px; color:var(--ink-soft);}
+.pchip-q{font-family:"Zen Kaku Gothic New",sans-serif; font-weight:700; color:var(--ink-faint); padding:0 4px;}
+.hidden-target{border-style:dashed;}
+.pt-hidden{color:var(--ink-faint); font-family:"Bodoni Moda","Times New Roman",Georgia,serif;}
+.pt-hint{white-space:nowrap;}
+.btn.on{background:var(--accent); color:#fff; border-color:transparent;}
 .play-cleared{margin-top:12px; text-align:center; font-weight:700; color:var(--ok); background:var(--ok-soft);
   border-radius:12px; padding:10px;}
 .play-meter{height:6px; border-radius:3px; background:var(--surface-2); overflow:hidden; margin-top:8px;}

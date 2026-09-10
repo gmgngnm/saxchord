@@ -128,9 +128,12 @@ const INSTRUMENTS = {
   alto: { id: "alto", jp: "アルト (E♭)", semi: 9, step: 5, octSemi: 9, lowest: 58, highest: 89 },
   tenor: { id: "tenor", jp: "テナー (B♭)", semi: 2, step: 1, octSemi: 14, lowest: 58, highest: 89 },
   soprano: { id: "soprano", jp: "ソプラノ (B♭)", semi: 2, step: 1, octSemi: 2, lowest: 58, highest: 89 },
-  bari: { id: "bari", jp: "バリトン (E♭)", semi: 9, step: 5, octSemi: 21, lowest: 56, highest: 89 },
-  c: { id: "c", jp: "C 管（移調なし）", semi: 0, step: 0, octSemi: 0, lowest: 58, highest: 89 }
+  bari: { id: "bari", jp: "バリトン (E♭)", semi: 9, step: 5, octSemi: 21, lowest: 56, highest: 89 }
 };
+// 「移調なし」は楽器としては置かない。
+// テナーを吹く人が C譜 を読みたくて選ぶと、実音そのままの運指が出て
+// 実際には 1 音低く鳴ってしまうため。C譜 を読みたいときは楽器はそのままで
+// 「譜面」を C譜 にする。
 
 /* ===================== 2. 運指データ ===================== */
 /* キーID:
@@ -267,7 +270,8 @@ const DEFAULT_SETTINGS = {
   // と見なす自己相関の下限。どちらも小さいほど敏感。
   micGate: 0.006,
   micClarity: 0.55,
-  palette: "brass"
+  palette: "brass",
+  playHide: false          // 吹いて答える：音名と運指を隠す
 };
 
 const PALETTES = [
@@ -438,12 +442,18 @@ function saxNote(freq, at, dur, gain, ctx) {
   lfoAmt.gain.linearRampToValueAtTime(freq * 0.007, t0 + Math.min(0.4, dur * 0.7));
   lfo.connect(lfoAmt); lfoAmt.connect(osc.frequency);
 
+  // 包絡は音の長さに合わせて縮める。短い音まで同じ立ち上がり・減衰にすると
+  // 「たたたん」が繋がって 1 つの音に聞こえてしまう。
+  const atk = Math.min(0.04, dur * 0.25);
+  const dip = Math.min(0.16, Math.max(atk + 0.01, dur * 0.5));
+  const rel = Math.min(0.09, Math.max(0.022, dur * 0.16));
+
   // 息が入ると倍音が開く
   const lp = ac.createBiquadFilter();
   lp.type = "lowpass"; lp.Q.value = 0.7;
   lp.frequency.setValueAtTime(Math.max(300, Math.min(1400, freq * 2.2)), t0);
-  lp.frequency.linearRampToValueAtTime(Math.min(7500, freq * 7.5), t0 + 0.08);
-  lp.frequency.setTargetAtTime(Math.min(4500, freq * 4.5), t0 + 0.2, 0.25);
+  lp.frequency.linearRampToValueAtTime(Math.min(7500, freq * 7.5), t0 + Math.min(0.08, dur * 0.45));
+  lp.frequency.setTargetAtTime(Math.min(4500, freq * 4.5), t0 + Math.min(0.2, dur * 0.7), 0.25);
 
   // フォルマント
   const f1 = ac.createBiquadFilter();
@@ -455,16 +465,16 @@ function saxNote(freq, at, dur, gain, ctx) {
 
   const amp = ac.createGain();
   amp.gain.setValueAtTime(0.0001, t0);
-  amp.gain.exponentialRampToValueAtTime(gain, t0 + 0.04);
-  amp.gain.exponentialRampToValueAtTime(gain * 0.8, t0 + 0.16);
-  amp.gain.setTargetAtTime(0.0001, Math.max(t0 + 0.18, t1 - 0.02), 0.06);
+  amp.gain.exponentialRampToValueAtTime(gain, t0 + atk);
+  amp.gain.exponentialRampToValueAtTime(gain * 0.82, t0 + dip);
+  amp.gain.setTargetAtTime(0.0001, t1, rel);
 
   osc.connect(lp); lp.connect(f1); f1.connect(f2); f2.connect(f3); f3.connect(amp); amp.connect(out);
-  osc.start(t0); osc.stop(t1 + 0.5);
-  lfo.start(t0); lfo.stop(t1 + 0.5);
+  osc.start(t0); osc.stop(t1 + rel * 6);
+  lfo.start(t0); lfo.stop(t1 + rel * 6);
 
   // アタックの息の音
-  const n = Math.max(1, Math.floor(ac.sampleRate * 0.07));
+  const n = Math.max(1, Math.floor(ac.sampleRate * Math.min(0.07, dur * 0.35)));
   const buf = ac.createBuffer(1, n, ac.sampleRate);
   const d = buf.getChannelData(0);
   for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2);
@@ -487,6 +497,16 @@ function blip(freq, at, dur, gain) {
   g.gain.setTargetAtTime(0.0001, t0 + dur * 0.5, 0.05);
   o.connect(g); g.connect(ac.destination);
   o.start(t0); o.stop(t0 + dur + 0.3);
+}
+
+// 全部吹けたあとに、コードトーンを「たたたん」で通して聴かせる
+function playLick(midis) {
+  if (!S.sound || !midis.length) return;
+  const gap = 0.19;
+  midis.forEach((m, i) => {
+    const last = i === midis.length - 1;
+    saxNote(midiToFreq(concertMidi(m)), i * gap, last ? 0.8 : 0.13, last ? 0.2 : 0.18);
+  });
 }
 
 function playWrittenMidis(midis, opts) {
@@ -985,7 +1005,7 @@ document.addEventListener("keydown", (e) => {
 
 const Play = {
   chord: null, wt: [], midis: [], idx: 0, done: [], hold: 0, n: 0, ok: 0,
-  order: "up", listening: false, sinceTarget: 0, armed: false
+  order: "up", listening: false, sinceTarget: 0, armed: false, reveal: false, cleared: false
 };
 
 // 判定は感度設定より厳しめの下限を使う。
@@ -1007,6 +1027,7 @@ function startPlayMode(chord) {
   }
   Play.idx = 0; Play.done = Play.wt.map(() => false); Play.hold = 0;
   Play.sinceTarget = Date.now(); Play.armed = false;
+  Play.reveal = false; Play.cleared = false;
   nav("play");
   renderPlay();
   ensureMic();
@@ -1045,7 +1066,7 @@ function onPlayFrame(r) {
       live.className = "play-live " + (hit ? "hit" : "miss");
       live.innerHTML = `<span class="pl-note">${pretty(commonName(pc))}<span class="pl-oct">${Math.floor(Mic.midi / 12) - 1}</span></span>` +
         `<span class="pl-cents ${Math.abs(Mic.cents) <= 15 ? "in" : ""}">${Mic.cents > 0 ? "+" : ""}${Mic.cents}¢</span>` +
-        `<span class="pl-hint">${hit ? "その音！" : "実音 " + pretty(commonName(targetPc)) + " を狙う"}</span>`;
+        `<span class="pl-hint">${hit ? "その音！" : (S.playHide && !Play.reveal ? "ちがう音" : "実音 " + pretty(commonName(targetPc)) + " を狙う")}</span>`;
     }
     const needle = $("#play-needle");
     if (needle && heard) needle.style.transform = `translateX(${Math.max(-50, Math.min(50, Mic.cents))}px)`;
@@ -1071,8 +1092,11 @@ function onPlayFrame(r) {
     Play.sinceTarget = Date.now(); Play.armed = false;
     if (Play.idx >= Play.wt.length) {
       recordAnswer(Play.chord.type.id, Play.chord.root, true);
+      Play.cleared = true; Play.reveal = true;
       renderPlay(true);
-      setTimeout(() => { if (currentScreen === "play") startPlayMode(newChord()); }, 1600);
+      playLick(Play.midis);
+      const wait = 900 + Play.midis.length * 190 + 900;
+      setTimeout(() => { if (currentScreen === "play" && Play.cleared) startPlayMode(newChord()); }, wait);
     } else {
       renderPlay();
     }
@@ -1082,20 +1106,31 @@ function onPlayFrame(r) {
 function renderPlay(cleared) {
   const body = $("#play-body");
   if (!Play.chord) { body.innerHTML = ""; return; }
+  const hide = S.playHide && !Play.reveal;
+
   const chips = Play.wt.map((t, i) => {
     const st = Play.done[i] ? "done" : i === Play.idx ? "now" : "todo";
-    return `<button class="pchip ${st}" data-i="${i}" type="button" title="この音に戻る"><span class="pchip-deg">${esc(degLabel(t.deg))}</span>${pretty(t.name)}</button>`;
+    const shown = (hide && !Play.done[i])
+      ? `<span class="pchip-q">?</span>`
+      : `<span class="pchip-deg">${esc(degLabel(t.deg))}</span>${pretty(t.name)}`;
+    return `<button class="pchip ${st}" data-i="${i}" type="button" title="この音に戻る">${shown}</button>`;
   }).join("");
+
   const i = Math.min(Play.idx, Play.wt.length - 1);
   const cur = Play.wt[i], curMidi = Play.midis[i];
 
-  body.innerHTML = `
-    <div class="qcard">
-      <div class="q-label">この音を順番に吹く ${pitchBadge()}</div>
-      <div class="q-main">${pretty(Play.chord.label)}</div>
-      <div class="pchips">${chips}</div>
-    </div>
-    ${cleared ? '<div class="play-cleared">全部吹けました 🎉</div>' : ""}
+  const target = hide ? `
+    <div class="play-target hidden-target">
+      <div class="pt-left">
+        <div class="pt-deg">${i + 1} 音目 / ${Play.wt.length}</div>
+        <div class="pt-note pt-hidden">?</div>
+        <div class="pt-sub">コードから自分で考えて吹く</div>
+      </div>
+      <div class="pt-right">
+        <button class="btn btn-ghost pt-hint" id="play-hint" type="button">ヒントを見る</button>
+      </div>
+    </div>`
+    : `
     <div class="play-target">
       <div class="pt-left">
         <div class="pt-deg">${esc(degLabel(cur.deg))}</div>
@@ -1104,7 +1139,17 @@ function renderPlay(cleared) {
         ${S.german ? `<div class="pt-ger">${esc(germanOf(cur.name))}</div>` : ""}
       </div>
       <div class="pt-right">${fingeringSVG(curMidi)}</div>
+    </div>`;
+
+  body.innerHTML = `
+    <div class="qcard">
+      <div class="q-label">この音を順番に吹く ${pitchBadge()}</div>
+      <div class="q-main">${pretty(Play.chord.label)}</div>
+      <div class="q-sub">${hide ? esc(Play.chord.type.jp) + " ／ 構成音は表示していません" : "&nbsp;"}</div>
+      <div class="pchips">${chips}</div>
     </div>
+    ${cleared ? '<div class="play-cleared">全部吹けました 🎉</div>' : ""}
+    ${target}
     ${Play.listening ? `
       <div class="play-live idle" id="play-live"><span class="pl-note">—</span><span class="pl-hint">吹いてください</span></div>
       <div class="tuner-scale"><div class="tuner-center"></div><div class="tuner-needle" id="play-needle"></div></div>
@@ -1117,8 +1162,10 @@ function renderPlay(cleared) {
     `}
     <div class="play-actions">
       <button class="btn btn-ghost" id="play-listen" type="button">♪ お手本</button>
-      <button class="btn btn-ghost" id="play-skip" type="button">この音をとばす</button>
-      <button class="btn btn-ghost" id="play-order" type="button">${Play.order === "up" ? "順番：上行" : "順番：ランダム"}</button>
+      <button class="btn btn-ghost" id="play-lick" type="button">♪ 通して聴く</button>
+      <button class="btn btn-ghost" id="play-skip" type="button">とばす</button>
+      <button class="btn btn-ghost${S.playHide ? " on" : ""}" id="play-hidemode" type="button">${S.playHide ? "音を表示する" : "音を隠す"}</button>
+      <button class="btn btn-ghost" id="play-order" type="button">${Play.order === "up" ? "上行" : "ランダム"}</button>
       <button class="btn btn-primary" id="play-next" type="button">次のコード →</button>
     </div>`;
   $("#play-score-text").textContent = `${Play.ok} 音クリア`;
@@ -1127,7 +1174,20 @@ function renderPlay(cleared) {
 $("#play-body").addEventListener("click", (e) => {
   if (handleMicPanelClick(e)) return;
   if (e.target.closest("#play-mic-on")) { ensureMic(); return; }
-  if (e.target.closest("#play-listen")) { playWrittenMidis([Play.midis[Math.min(Play.idx, Play.midis.length - 1)]], { dur: 0.9 }); return; }
+  if (e.target.closest("#play-listen")) {
+    // 音を隠しているときにお手本を鳴らすと答えになってしまうので、ヒント扱いにする
+    if (S.playHide && !Play.reveal) { Play.reveal = true; renderPlay(); }
+    playWrittenMidis([Play.midis[Math.min(Play.idx, Play.midis.length - 1)]], { dur: 0.9 });
+    return;
+  }
+  if (e.target.closest("#play-lick")) { playLick(Play.midis); return; }
+  if (e.target.closest("#play-hint")) { Play.reveal = true; renderPlay(); return; }
+  if (e.target.closest("#play-hidemode")) {
+    S.playHide = !S.playHide; save();
+    Play.reveal = false;
+    renderPlay();
+    return;
+  }
   if (e.target.closest("#play-skip")) {
     Play.idx = Math.min(Play.idx + 1, Play.wt.length);
     Play.sinceTarget = Date.now(); Play.armed = false; Play.hold = 0;
@@ -1141,6 +1201,8 @@ $("#play-body").addEventListener("click", (e) => {
     Play.idx = i;
     for (let k = i; k < Play.done.length; k++) Play.done[k] = false;
     Play.sinceTarget = Date.now(); Play.armed = false; Play.hold = 0;
+    Play.cleared = false;
+    if (S.playHide) Play.reveal = false;
     renderPlay();
     return;
   }
@@ -1148,7 +1210,7 @@ $("#play-body").addEventListener("click", (e) => {
     Play.order = Play.order === "up" ? "random" : "up";
     startPlayMode(Play.chord); return;
   }
-  if (e.target.closest("#play-next")) { startPlayMode(newChord()); return; }
+  if (e.target.closest("#play-next")) { Play.cleared = false; startPlayMode(newChord()); return; }
 });
 
 
@@ -1375,8 +1437,10 @@ function renderHelp() {
     <ol class="help-steps">
       <li><b>コードを見る</b>（例：Dm7）。その下の丸い並びが、これから吹く音の一覧です。</li>
       <li><b>大きく出ている音を吹く</b>。左に音名と度数、右にその運指図が出ます。</li>
-      <li>合っていれば<b>音名の並びが緑になって次へ進みます</b>。全部吹けたら次のコードへ。</li>
+      <li>合っていれば<b>音名の並びが緑になって次へ進みます</b>。</li>
+      <li>全部吹けると、コードトーンが<b>「たたたん」と通しで鳴ります</b>。フレーズとして耳に残すためのものです（「♪ 通して聴く」でいつでも鳴らせます）。</li>
     </ol>
+    <p class="help-p"><b>音を隠す</b>を押すと、コード名だけが出て構成音も運指も表示されません。自分で考えて吹く練習用です。分からなくなったら「ヒントを見る」で表示できます。吹けた音から順に表示されます。</p>
 
     <div class="help-legend">
       <div class="help-legend-title">画面の見方</div>
@@ -1465,9 +1529,7 @@ function renderSettings() {
     <p class="dim small">${inst().semi ? `${scoreName()}（あなたの譜面）は実音より ＋${inst().semi} 半音で書かれます。` : "C 管なので譜面と実音は同じです。"}運指図はつねにあなたの譜面（押さえる指）で表示します。C 管はサックスの運指図のまま、移調だけを外したい人向けです。</p>
 
     <h3 class="sec-title">譜面（どの譜面のコードで出題するか）</h3>
-    ${inst().semi === 0 ? `
-      <p class="dim small">いまの楽器は C 管なので、C譜＝あなたの譜面です。移調はありません。</p>
-    ` : `
+    ${`
       <div class="seg-row">
         <button class="seg ${S.chartPitch === "written" ? "on" : ""}" data-pitch="written" type="button">${scoreName()}（自分のパート譜）</button>
         <button class="seg ${S.chartPitch === "concert" ? "on" : ""}" data-pitch="concert" type="button">C譜（実音・イン C）</button>
@@ -1478,6 +1540,7 @@ function renderSettings() {
         自分で移調して吹くので、「C譜の C△7 は ${pretty(transposeName("C", inst().semi, inst().step))}△7 として吹く」という訓練になります。
       </p>
     `}
+    <p class="dim small">C譜を読みたいだけのときは、<b>楽器は自分の楽器のまま</b>で「C譜」を選んでください。運指はあなたの楽器のものが出ます。</p>
 
     <h3 class="sec-title">出題するコード</h3>
     ${typeGroup(1, "レベル1", "まずここから。三和音とセブンス")}
@@ -1571,9 +1634,7 @@ function quickSheetHTML() {
     <div class="sheet-sec">楽器</div>
     <div class="seg-row">${instBtns}</div>
     <div class="sheet-sec">譜面</div>
-    ${inst().semi === 0
-      ? '<p class="dim small">C 管なので移調はありません（C譜＝あなたの譜面）。</p>'
-      : `<div class="seg-row">
+    ${`<div class="seg-row">
           <button class="seg ${S.chartPitch === "written" ? "on" : ""}" data-pitch="written" type="button">${scoreName()}（自分のパート譜）</button>
           <button class="seg ${S.chartPitch === "concert" ? "on" : ""}" data-pitch="concert" type="button">C譜（実音）</button>
         </div>
@@ -1626,9 +1687,7 @@ function updateBadge() {
   if (note) {
     note.innerHTML = usesConcertChart()
       ? `いまは <b>C譜（実音）</b> で出題。${esc(inst().jp)}なので、C譜の C のコードは <b>${pretty(transposeName("C", inst().semi, inst().step))}</b> として吹きます。`
-      : inst().semi === 0
-        ? `いまは <b>C譜</b> で出題。${esc(inst().jp)}なので移調はありません。`
-        : `いまは <b>${scoreName()}（自分のパート譜）</b> で出題。書かれたまま吹きます。${scoreName()}の C は実音 <b>${pretty(transposeName("C", -inst().semi + 12, -inst().step + 7))}</b>。`;
+      : `いまは <b>${scoreName()}（自分のパート譜）</b> で出題。書かれたまま吹きます。${scoreName()}の C は実音 <b>${pretty(transposeName("C", -inst().semi + 12, -inst().step + 7))}</b>。`;
   }
 }
 

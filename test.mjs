@@ -296,7 +296,7 @@ ck('感度1でしきい値が上がる', await page.evaluate(() => window.SaxCho
 // 上部バッジからのクイック切替
 await page.click('#inst-badge');
 await page.waitForSelector('#quick-sheet:not([hidden])');
-ck('バッジから楽器シートが開く', await page.locator('#quick-sheet [data-inst]').count() === 5);
+ck('バッジから楽器シートが開く', await page.locator('#quick-sheet [data-inst]').count() === 4);
 await page.click('#quick-sheet [data-inst="tenor"]');
 await page.waitForTimeout(150);
 ck('シートでテナーに切り替わる', /テナー/.test(await page.locator('#inst-badge').textContent()));
@@ -368,20 +368,23 @@ ck('テナー → B♭譜と表示', (await badgeOf('tones')) === 'B♭譜（あ
 await useSettings({ instrument:'alto', chartPitch:'concert', types:['maj7'], roots:['C'], sound:false });
 ck('C譜モード → C譜（実音）と表示', (await badgeOf('tones')) === 'C譜（実音）');
 
-// C 管：移調が起きないこと
-await useSettings({ instrument:'c', chartPitch:'concert', types:['maj7'], roots:['Eb'], sound:false });
-ck('C管 → C譜と表示', (await badgeOf('tones')) === 'C譜（あなたの譜面）');
-const cInst = await page.evaluate(() => {
-  const q = window.SaxChord.Quiz.q;
-  return { label: q.chord.label, tones: q.chord.tones.map(t=>t.name).join(' '), written: q.wt.map(t=>t.name).join(' ') };
-});
-ck('C管では吹く音＝コードの音（移調ゼロ）', cInst.tones === cInst.written && cInst.written === 'Eb G Bb D', JSON.stringify(cInst));
-
-// C 管のときは譜面の選択肢を出さない（意味がないので）
+// 楽器はサックス 4 種だけ（「移調なし」は罠になるので置かない）
 await page.click('[data-nav="home"]'); await page.click('#tb-settings');
-await page.waitForSelector('.settings-wrap, #settings-wrap');
-ck('C管では譜面の切替ボタンを出さない', await page.locator('[data-pitch]').count() === 0);
-ck('C管では理由を説明する', /C 管なので/.test(await page.locator('#settings-wrap').textContent()));
+await page.waitForSelector('[data-inst]');
+const insts = await page.$$eval('[data-inst]', els => els.map(e => e.dataset.inst));
+ck('楽器はサックス4種', JSON.stringify(insts) === JSON.stringify(['alto','tenor','soprano','bari']), JSON.stringify(insts));
+ck('移調なしのC管は出さない', !insts.includes('c'));
+ck('C譜の案内がある', /楽器は自分の楽器のまま/.test(await page.locator('#settings-wrap').textContent()));
+
+// テナーで C譜 を読む場合、運指はテナーのもの（実音そのままにはしない）
+await useSettings({ instrument:'tenor', chartPitch:'concert', types:['maj7'], roots:['C'], sound:false });
+await page.click('[data-mode="tones"]');
+await page.waitForSelector('.qcard');
+const tenorC = await page.evaluate(() => {
+  const q = window.SaxChord.Quiz.q;
+  return { label: q.chord.label, written: q.wt.map(t => t.name).join(' ') };
+});
+ck('テナーでC譜のCmaj7は記譜 D F# A C#', tenorC.label === 'Cmaj7' && tenorC.written === 'D F# A C#', JSON.stringify(tenorC));
 
 await useSettings({ instrument:'alto', chartPitch:'written', types:['maj7'], roots:['C'], sound:false });
 await page.click('#tb-settings');
@@ -506,6 +509,62 @@ ck('音が終わる', sound.tail < sound.body * 0.2, JSON.stringify({t: sound.ta
 ck('鳴らした音程が正しい', Math.abs(sound.pitch - 440) < 6, sound.pitch);
 ck('倍音が並んでいる（サイン波ではない）', sound.h[1] > sound.h[0] * 0.25 && sound.h[2] > sound.h[0] * 0.15, JSON.stringify(sound.h.map(x=>+x.toFixed(4))));
 ck('高い倍音ほど弱い', sound.h[5] < sound.h[1], JSON.stringify(sound.h.map(x=>+x.toFixed(4))));
+
+
+// --- 12. 吹いて答える：音を隠すモードと通し再生 ---
+await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.click('[data-mode="play"]');
+await page.waitForSelector('#play-body .qcard');
+ck('通常は構成音が見えている', (await page.locator('.pchip-q').count()) === 0
+  && (await page.locator('.play-target .fk').count()) === 1);
+await page.click('#play-hidemode');
+await page.waitForTimeout(200);
+const hidden = await page.evaluate(() => ({
+  chord: document.querySelector('#play-body .q-main').textContent,
+  qs: document.querySelectorAll('.pchip-q').length,
+  notes: document.querySelectorAll('.play-target .fk').length,
+  target: (document.querySelector('.pt-note') || {}).textContent,
+  saved: JSON.parse(localStorage.getItem('saxchord.v1')).settings.playHide
+}));
+ck('音を隠すとコード名だけになる', hidden.chord.length > 0 && hidden.qs >= 3 && hidden.notes === 0, JSON.stringify(hidden));
+ck('隠しているとき目標の音名も出ない', hidden.target === '?', JSON.stringify(hidden));
+ck('隠しモードは保存される', hidden.saved === true);
+await page.click('#play-hint');
+await page.waitForTimeout(200);
+ck('ヒントで音名と運指が出る', (await page.locator('.play-target .fk').count()) === 1
+  && (await page.locator('.pt-note').textContent()) !== '?');
+await page.click('#play-hidemode');
+await page.waitForTimeout(150);
+ck('隠しモードを戻せる', (await page.locator('.pchip-q').count()) === 0);
+
+// 通しのリズム再生（実際にレンダリングして、音の数と長さの並びを見る）
+const lick = await page.evaluate(async () => {
+  const sr = 22050, oc = new OfflineAudioContext(1, sr * 3, sr);
+  const A = window.SaxChord;
+  [62, 65, 69, 72].forEach((m, i) => {
+    const last = i === 3;
+    A.saxNote(440 * Math.pow(2, (m - 69) / 12), i * 0.19, last ? 0.8 : 0.13, last ? 0.2 : 0.18, oc);
+  });
+  const d = (await oc.startRendering()).getChannelData(0);
+  // 音が鳴っている区間を数える
+  const win = Math.floor(sr * 0.01);
+  const env = [];
+  for (let i = 0; i + win < d.length; i += win) {
+    let s = 0; for (let j = 0; j < win; j++) s += d[i + j] * d[i + j];
+    env.push(Math.sqrt(s / win));
+  }
+  const th = Math.max(...env) * 0.12;
+  const runs = []; let on = false, st = 0;
+  env.forEach((v, i) => {
+    if (v > th && !on) { on = true; st = i; }
+    else if (v <= th && on) { on = false; runs.push((i - st) * 0.01); }
+  });
+  if (on) runs.push((env.length - st) * 0.01);
+  return runs.map(x => +x.toFixed(2));
+});
+ck('通し再生は4音鳴る', lick.length === 4, JSON.stringify(lick));
+ck('最後だけ長い（たたたん）', lick.length === 4 && lick[3] > lick[0] * 2, JSON.stringify(lick));
 
 ck('JSエラーなし', errs.length===0 && errs2.length===0, JSON.stringify(errs.concat(errs2)));
 

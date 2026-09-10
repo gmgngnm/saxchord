@@ -80,8 +80,11 @@
     </div>
 
     <div class="home-links">
+      <button class="link-card" data-nav="chords" type="button">
+        <span>コード表</span><span class="chev" aria-hidden="true">›</span>
+      </button>
       <button class="link-card" data-nav="chart" type="button">
-        <span>運指表を見る</span><span class="chev" aria-hidden="true">›</span>
+        <span>運指表（音ごと）</span><span class="chev" aria-hidden="true">›</span>
       </button>
       <button class="link-card" data-nav="tuner" type="button">
         <span>チューナー / 音当て（マイク）</span><span class="chev" aria-hidden="true">›</span>
@@ -111,6 +114,12 @@
       <div class="score-line"><span id="play-score-text">0 / 0</span></div>
     </div>
     <div class="quiz-body" id="play-body"></div>
+  </section>
+
+  <!-- ============ コード表 ============ -->
+  <section id="screen-chords" class="screen">
+    <div class="quiz-head"><h2 class="screen-title">コード表</h2></div>
+    <div class="chords-wrap" id="chords-wrap"></div>
   </section>
 
   <!-- ============ 運指表 ============ -->

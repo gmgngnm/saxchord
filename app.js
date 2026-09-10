@@ -639,6 +639,7 @@ const TOPBAR = {
   quiz:     { help: true,  home: true,  back: false, settings: false },
   play:     { help: true,  home: true,  back: false, settings: false },
   help:     { help: false, home: false, back: true,  settings: false },
+  chords:   { help: false, home: false, back: true,  settings: false },
   chart:    { help: false, home: false, back: true,  settings: false },
   tuner:    { help: false, home: false, back: true,  settings: false },
   stats:    { help: false, home: false, back: true,  settings: false },
@@ -666,6 +667,7 @@ function nav(name) {
   if (name === "settings") renderSettings();
   if (name === "stats") renderStats();
   if (name === "chart") renderChart();
+  if (name === "chords") renderChords();
   if (name === "help") renderHelp();
   if (name === "tuner") renderTuner();
 }
@@ -1308,6 +1310,66 @@ function handleMicPanelClick(e) {
   return false;
 }
 
+
+/* ===================== コード表 ===================== */
+
+const ChordTable = { root: "C", typeId: "maj7" };
+
+function renderChords() {
+  const wrap = $("#chords-wrap");
+  const type = TYPE_BY_ID[ChordTable.typeId] || TYPE_BY_ID.maj7;
+  const chord = buildChord(ChordTable.root, type);
+  const wt = writtenTones(chord);
+  const midis = voiceChord(wt);
+
+  const roots = ROOTS_MAIN.concat(ROOTS_EXTRA).map((r) =>
+    `<button class="root-btn ${r === ChordTable.root ? "on" : ""}" data-croot="${esc(r)}" type="button">${pretty(r)}</button>`).join("");
+  const typeGroup = (lv, title) => `
+    <div class="ctype-group">
+      <div class="ctype-title">${esc(title)}</div>
+      <div class="ctype-row">${CHORD_TYPES.filter((t) => t.level === lv).map((t) =>
+        `<button class="ctype ${t.id === ChordTable.typeId ? "on" : ""}" data-ctype="${t.id}" type="button">${pretty(t.suffix || "（メジャー）")}</button>`).join("")}</div>
+    </div>`;
+
+  const concertLine = usesConcertChart()
+    ? `<div class="ap-line"><span class="ap-key">C譜（実音）</span>${chord.tones.map((t) => noteHTML(t.name)).join('<span class="sep">·</span>')}</div>`
+    : `<div class="ap-line"><span class="ap-key">実音</span>${chord.tones.map((t) => noteHTML(toConcertName(t.name))).join('<span class="sep">·</span>')}</div>`;
+
+  wrap.innerHTML = `
+    <div class="root-row">${roots}</div>
+    ${typeGroup(1, "レベル1")}${typeGroup(2, "レベル2")}${typeGroup(3, "レベル3")}
+
+    <div class="cdetail">
+      <div class="ap-head">
+        <span class="ap-chord">${pretty(chord.label)}<span class="ap-jp">${esc(type.jp)}</span></span>
+        ${pitchBadge()}
+      </div>
+      <div class="ap-line"><span class="ap-key">${usesConcertChart() ? "吹く音" : "構成音"}</span>${
+        wt.map((t) => `<span class="tone"><span class="tone-deg">${esc(degLabel(t.deg))}</span>${noteHTML(t.name)}</span>`).join("")}</div>
+      ${concertLine}
+      <div class="fcards">${wt.map((t, i) => fingerCardHTML(t, midis[i])).join("")}</div>
+      <div class="ap-actions">
+        <button class="btn btn-ghost" id="ct-play" type="button">♪ 1音ずつ</button>
+        <button class="btn btn-ghost" id="ct-lick" type="button">♪ 通して聴く</button>
+        <button class="btn btn-primary" id="ct-blow" type="button">🎤 これを吹く</button>
+      </div>
+    </div>
+    <p class="chart-lead">運指図はクイズと同じものです。塗ってあるキーを押さえます。図の下の文字は、この絵に描かれていないキー（小指のキーなど）です。</p>`;
+}
+
+$("#chords-wrap").addEventListener("click", (e) => {
+  const r = e.target.closest("[data-croot]");
+  if (r) { ChordTable.root = r.dataset.croot; renderChords(); return; }
+  const t = e.target.closest("[data-ctype]");
+  if (t) { ChordTable.typeId = t.dataset.ctype; renderChords(); return; }
+  const type = TYPE_BY_ID[ChordTable.typeId] || TYPE_BY_ID.maj7;
+  const chord = buildChord(ChordTable.root, type);
+  const midis = voiceChord(writtenTones(chord));
+  if (e.target.closest("#ct-play")) { playWrittenMidis(midis, { chord: true }); return; }
+  if (e.target.closest("#ct-lick")) { playLick(midis); return; }
+  if (e.target.closest("#ct-blow")) { startPlayMode(chord); return; }
+});
+
 /* ===================== 12. 運指表 ===================== */
 
 const CHART_SECTIONS = [
@@ -1488,6 +1550,7 @@ function renderHelp() {
       <li><b>構成音 → コード名</b>：並んだ音からコード名を当てる。</li>
       <li><b>運指クイズ</b>：運指図 → 音名、音名 → 運指の両方向。</li>
     </ul>
+    <p class="help-p">クイズではなく調べたいときは、ホームの<b>コード表</b>から。ルートと種類を選ぶと構成音と運指がまとめて出て、そのまま「これを吹く」で練習に移れます。</p>
     <p class="help-p">答え合わせでは必ず<b>構成音ぜんぶの運指図</b>が出ます。苦手なコードほど出題されやすくなります（成績画面で確認できます）。</p>
 
     <h3 class="help-h">C譜と移調譜</h3>

@@ -374,3 +374,20 @@ button{font-family:inherit; color:inherit;}
 .pal.on{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft);}
 .pal-sw{display:flex; gap:3px;}
 .pal-sw i{width:14px; height:14px; border-radius:4px; display:block;}
+
+/* ---------- コード表 ---------- */
+.chords-wrap{padding-bottom:20px;}
+.root-row{display:grid; grid-template-columns:repeat(7,1fr); gap:5px; margin-bottom:14px;}
+.root-btn{padding:9px 0; border-radius:10px; border:1px solid var(--line); background:var(--surface);
+  font-family:"Bodoni Moda","Times New Roman",Georgia,serif; font-weight:700; font-size:15px; cursor:pointer;}
+.root-btn.on{background:var(--accent); color:#fff; border-color:transparent;}
+.ctype-group{margin-bottom:8px;}
+.ctype-title{font-size:10.5px; color:var(--ink-faint); margin-bottom:4px;}
+.ctype-row{display:flex; flex-wrap:wrap; gap:5px;}
+.ctype{padding:6px 10px; border-radius:9px; border:1px solid var(--line); background:var(--surface);
+  font-family:"Bodoni Moda","Times New Roman",Georgia,serif; font-weight:700; font-size:13px; cursor:pointer;}
+.ctype.on{background:var(--accent); color:#fff; border-color:transparent;}
+.cdetail{margin-top:16px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:14px;}
+.cdetail .ap-head{justify-content:space-between;}
+.cdetail .fcards{padding-top:14px;}

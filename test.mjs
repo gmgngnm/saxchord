@@ -577,6 +577,34 @@ const lick = await page.evaluate(async () => {
 ck('通し再生は4音鳴る', lick.length === 4, JSON.stringify(lick));
 ck('最後だけ長い（たたたん）', lick.length === 4 && lick[3] > lick[0] * 2, JSON.stringify(lick));
 
+
+// --- 13. コード表 ---
+await page.evaluate(() => localStorage.removeItem('saxchord.v1'));
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.click('[data-nav="chords"]');
+await page.waitForSelector('#screen-chords.active .cdetail');
+ck('コード表にルート14個', await page.locator('.root-btn').count() === 14);
+ck('コード表に全コードタイプ', await page.locator('.ctype').count() === 24);
+ck('コード表では戻るボタン', await page.locator('#tb-back').isVisible() && !(await page.locator('#tb-settings').isVisible()));
+await page.click('.root-btn[data-croot="Eb"]');
+await page.click('.ctype[data-ctype="m7b5"]');
+await page.waitForTimeout(200);
+const ct = await page.evaluate(() => ({
+  title: document.querySelector('.cdetail .ap-chord').textContent,
+  tones: [...document.querySelectorAll('.cdetail .ap-line .tone')].map(e => e.textContent),
+  figs: document.querySelectorAll('.cdetail .fcard .fk').length,
+  quizSame: document.querySelectorAll('.cdetail .fcard .fk-base').length
+}));
+ck('選んだコードが出る', /E♭m7\(♭5\)/.test(ct.title), ct.title);
+ck('構成音は E♭ G♭ B𝄫 D♭', ct.tones.length === 4 && /E♭/.test(ct.tones[0]) && /D♭/.test(ct.tones[3]), JSON.stringify(ct.tones));
+ck('構成音ぶんの運指図が出る', ct.figs === 4, JSON.stringify(ct));
+ck('運指図はクイズと同じ仕組み', ct.quizSame === 4, JSON.stringify(ct));
+// そのまま吹く練習へ渡せる
+await page.click('#ct-blow');
+await page.waitForTimeout(300);
+ck('「これを吹く」で吹いて答えるに移る', await page.locator('#screen-play.active').count() === 1
+  && /E♭m7/.test(await page.locator('#play-body .q-main').textContent()));
+
 ck('JSエラーなし', errs.length===0 && errs2.length===0, JSON.stringify(errs.concat(errs2)));
 
 await browser.close(); server.close();

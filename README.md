@@ -119,6 +119,19 @@ python3 -m http.server 8000
 
 リポジトリを丸ごとどこかに置けば、そのまま静的サイトとして動く（ビルド・依存なし）。
 
+## 配信するときの注意
+
+GitHub Pages は静的ファイルに 10 分のキャッシュ指示を付ける。そのままだと
+**新しい index.html と古い app.js** の組み合わせが成立してしまい、画面の枠だけ
+出て中身が空になる。対策として:
+
+- `index.html` は `app.js?v=N` / `styles.css?v=N` と、バージョン付きの URL で読む。
+  **app.js か styles.css を変えたら、この N を両方いっしょに上げること**
+- Service Worker はネットワーク優先かつ `cache: "no-cache"`（サーバに必ず確認）。
+  インストール時は `cache: "reload"`。オフライン時は `ignoreSearch` でクエリを
+  無視してキャッシュを拾うので、バージョンを上げてもオフライン動作は保たれる
+- `sw.js` 自体も `updateViaCache: "none"` で登録し、起動時に更新を確認する
+
 ## テスト
 
 `node test.mjs`（Playwright）で音楽理論・運指データ・ピッチ検出・各画面の操作を通しで検証している。

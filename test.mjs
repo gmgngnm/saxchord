@@ -605,6 +605,27 @@ await page.waitForTimeout(300);
 ck('「これを吹く」で吹いて答えるに移る', await page.locator('#screen-play.active').count() === 1
   && /E♭m7/.test(await page.locator('#play-body .q-main').textContent()));
 
+
+// --- 14. 配信まわり（古いキャッシュで画面が空になるのを防ぐ） ---
+const shipping = await page.evaluate(async () => {
+  const html = await (await fetch('index.html', { cache: 'no-store' })).text();
+  const js = (html.match(/src="app\.js\?v=(\d+)"/) || [])[1];
+  const css = (html.match(/href="styles\.css\?v=(\d+)"/) || [])[1];
+  const sw = await (await fetch('sw.js', { cache: 'no-store' })).text();
+  return { js, css, swNoCache: /cache: "no-cache"/.test(sw), swReload: /cache: "reload"/.test(sw),
+           ignoreSearch: /ignoreSearch/.test(sw), updateViaCache: /updateViaCache/.test(html) };
+});
+ck('app.js にバージョンが付いている', !!shipping.js, JSON.stringify(shipping));
+ck('styles.css にも同じバージョン', shipping.css === shipping.js, JSON.stringify(shipping));
+ck('SW はサーバに必ず確認する', shipping.swNoCache && shipping.swReload, JSON.stringify(shipping));
+ck('オフライン時はクエリを無視して拾う', shipping.ignoreSearch, JSON.stringify(shipping));
+// コード表が空にならないこと（今回の不具合の再発防止）
+await page.click('[data-nav="home"]');
+await page.click('[data-nav="chords"]');
+await page.waitForTimeout(300);
+const notEmpty = await page.evaluate(() => document.querySelector('#chords-wrap').children.length);
+ck('コード表が空でない', notEmpty >= 3, String(notEmpty));
+
 ck('JSエラーなし', errs.length===0 && errs2.length===0, JSON.stringify(errs.concat(errs2)));
 
 await browser.close(); server.close();

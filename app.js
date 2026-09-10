@@ -1782,7 +1782,13 @@ nav("home");
 })();
 
 // load を待つと、外部リソースが詰まったときに登録されないので待たない
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator) {
+  // updateViaCache: "none" で sw.js 自体もキャッシュから読ませない。
+  // 新しい版が出たら、その場で入れ替えて次の読み込みから反映させる。
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
+    .then((reg) => { reg.update().catch(() => {}); })
+    .catch(() => {});
+}
 
 // デバッグ・テスト用に主要関数を公開する
 window.__TYPES = CHORD_TYPES;
